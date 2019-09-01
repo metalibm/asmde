@@ -34,12 +34,45 @@ class ImmediateValue:
     def __init__(self, value):
         self.value = value
 
+class DebugObject:
+    def __init__(self, src_line, src_file=None):
+        self.src_file = src_file
+        self.src_line = src_line
+
+    def __repr__(self):
+        return "DebugObject(lineno={})".format(self.src_file)
+
+class Instruction:
+    def __init__(self, insn_object, def_list=None, use_list=None, dbg_object=None):
+        self.insn_object = insn_object
+        self.def_list = [] if def_list is None else def_list
+        self.use_list = [] if use_list is None else use_list
+        self.dbg_object = dbg_object
+
+    def __repr__(self):
+        return self.insn_object
+
+class Bundle:
+    def __init__(self, insn_list=None):
+        self.insn_list = [] if insn_list is None else insn_list
+
+    def add_insn(self, insn):
+        self.insn_list.append(insn)
+
+    def __repr__(self):
+        return "Bundle({})".format(self.insn_list)
 
 class Architecture:
-    def parse_asm_line(self, lexem_list):
+    def __init__(self):
+        self.ongoing_bundle = Bundle()
+        self.program = []
+
+    def parse_asm_line(self, lexem_list, dbg_object):
         if not len(lexem_list): return
         head = lexem_list[0]
         if isinstance(head, BundleSeparatorLexem):
+            self.program.append(self.ongoing_bundle)
+            self.ongoing_bundle = Bundle()
             print("End of bundle")
         elif isinstance(head, Lexem):
             INSN_PARSING_MAP = {
@@ -49,6 +82,8 @@ class Architecture:
             if head.value in INSN_PARSING_MAP:
                 parsing_method = INSN_PARSING_MAP[head.value]
                 insn, lexem_list = parsing_method(lexem_list)
+                insn.dbg_object = dbg_object
+                self.ongoing_bundle.add_insn(insn)
             else:
                 print(lexem_list)
                 raise NotImplementedError
@@ -144,24 +179,25 @@ class Architecture:
         print("LOAD INSN")
         print("   defs: {}".format(dst_reg))
         print("   uses: {}".format(addr))
-        return (insn, dst_reg, addr), lexem_list
+        insn_object = Instruction("load", use_list=addr, def_list=[dst_reg])
+        return insn_object, lexem_list
 
     def parse_add_from_list(self, lexem_list):
         insn, lexem_list = self.parse_insn_from_list(lexem_list)
         dst_reg, lexem_list = self.parse_register_from_list(lexem_list)
         lhs, lexem_list = self.parse_register_from_list(lexem_list)
         rhs, lexem_list = self.parse_register_from_list(lexem_list)
-        print("ADD INSN")
-        print("   defs: {}".format(dst_reg))
-        print("   uses: {}".format((lhs, rhs)))
-        return (insn, dst_reg, (lhs, rhs)), lexem_list
+        insn_object = Instruction("add", use_list=[lhs, rhs], def_list=[dst_reg])
+        return insn_object, lexem_list
 
 test_string = """\
 ld $r4 = $r2[$r12]
+add $r3 = $r2, $r1
 ;;
 add $r3 = $r2, $r1
 ;;
 add $r3 = R(add), $r1
+ld $r4 = $r2[$r12]
 ;;
 """
 
@@ -175,8 +211,11 @@ if __name__ == "__main__":
 
     arch = Architecture()
 
-    for line in test_string.split("\n"):
+    for line_no, line in enumerate(test_string.split("\n")):
         lexem_list = lexer.generate_line_lexems(line)
+        dbg_object = DebugObject(line_no)
         print("lexem_list: ", lexem_list)
-        arch.parse_asm_line(lexem_list)
+        arch.parse_asm_line(lexem_list, dbg_object=dbg_object)
+
+    print(arch.program)
 
