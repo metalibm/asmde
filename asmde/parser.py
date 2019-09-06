@@ -184,7 +184,6 @@ class AsmParser:
         if isinstance(lexem, VirtualRegisterLexem):
             return self.parse_virtual_register(lexem)
 
-
         if not isinstance(lexem, RegisterLexem):
             raise Exception("RegisterLexem was expected, got: {}".format(lexem))
 
@@ -192,7 +191,6 @@ class AsmParser:
         ACC_REG_PATTERN = "\$([a][0-9]+){1,4}"
 
         index_range = [int(index) for index in re.split("\D+", lexem.value) if index != ""]
-        sub_reg_num = len(index_range)
 
         if re.fullmatch(STD_REG_PATTERN, lexem.value):
             register_list = [self.arch.get_unique_phys_reg_object(index, ArchRegister.Std) for index in index_range]
@@ -204,12 +202,17 @@ class AsmParser:
         return register_list
 
     def parse_offset_from_list(self, lexem_list):
-        offset = lexem_list[0]
+        offset_lexem = lexem_list[0]
         lexem_list = lexem_list[1:]
-        if isinstance(offset, ImmediateLexem):
-            offset = ImmediateValue(int(offset.value))
-        elif isinstance(offset, RegisterLexem):
-            offset = self.parse_register(offset)
+        if isinstance(offset_lexem, ImmediateLexem):
+            offset = ImmediateValue(int(offset_lexem.value))
+        elif isinstance(offset_lexem, VirtualRegisterLexem):
+            offset = self.parse_virtual_register(offset_lexem)
+        elif isinstance(offset_lexem, RegisterLexem):
+            offset = self.parse_register(offset_lexem)
+        else:
+            print("unrecognized lexem {} while parsing for offset".format(offset_lexem))
+            raise NotImplementedError
         return offset, lexem_list
 
     def parse_base_addr_from_list(self, lexem_list):
@@ -471,19 +474,19 @@ class RegisterAssignator:
 
 
 test_string = """\
-add $r4 = $r5, $r5
-ld $r4 = $r4[$r12]
+add R(p) = $r5, $r5
+ld R(p) = R(p)[$r12]
 ;;
-movefo A(acc) = $r4, $r2
+movefo A(acc) = R(p), $r2
 ;;
 add R(add) = $r1, $r1
 ;;
 movefa $r2 = A(acc)
 ;;
 add $r3 = R(add), $r2
-ld $r4 = $r2[$r12]
+ld R(p) = $r2[$r12]
 ;;
-add R(beta) = $r4, $r3
+add R(beta) = R(p), $r3
 ;;
 add $r0 = R(beta), R(add)
 ;;
