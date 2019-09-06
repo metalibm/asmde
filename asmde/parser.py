@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import re
+import sys
 
 import lexer
 
@@ -11,8 +12,10 @@ from lexer import (
 )
 
 class Register:
-    class Std: pass
-    class Acc: pass
+    class Std:
+        name = "Std"
+    class Acc:
+        name = "Acc"
 
 class SubRegister:
     """ Elementary register object """
@@ -120,11 +123,12 @@ class AsmParser:
         if isinstance(head, BundleSeparatorLexem):
             self.program.append(self.ongoing_bundle)
             self.ongoing_bundle = Bundle()
-            print("End of bundle")
         elif isinstance(head, Lexem):
             INSN_PARSING_MAP = {
                 "ld": self.parse_load_from_list,
-                "add": self.parse_add_from_list
+                "add": self.parse_add_from_list,
+                "movefa": self.parse_mofeva_from_list,
+                "movefo": self.parse_mofevo_from_list,
             }
             if head.value in INSN_PARSING_MAP:
                 parsing_method = INSN_PARSING_MAP[head.value]
@@ -132,7 +136,6 @@ class AsmParser:
                 insn.dbg_object = dbg_object
                 self.ongoing_bundle.add_insn(insn)
             else:
-                print(lexem_list)
                 raise NotImplementedError
         else:
             raise NotImplementedError
@@ -225,9 +228,6 @@ class AsmParser:
         insn, lexem_list = self.parse_insn_from_list(lexem_list)
         dst_reg, lexem_list = self.parse_register_from_list(lexem_list)
         addr, lexem_list = self.parse_addr_from_list(lexem_list)
-        print("LOAD INSN")
-        print("   defs: {}".format(dst_reg))
-        print("   uses: {}".format(addr))
         insn_object = Instruction("load", use_list=addr, def_list=dst_reg)
         return insn_object, lexem_list
 
@@ -236,10 +236,22 @@ class AsmParser:
         dst_reg, lexem_list = self.parse_register_from_list(lexem_list)
         lhs, lexem_list = self.parse_register_from_list(lexem_list)
         rhs, lexem_list = self.parse_register_from_list(lexem_list)
-        print("ADD INSN")
-        print("   defs: {}".format(dst_reg))
-        print("   uses: {}".format(lhs + rhs))
         insn_object = Instruction("add", use_list=(lhs + rhs), def_list=dst_reg)
+        return insn_object, lexem_list
+
+    def parse_mofevo_from_list(self, lexem_list):
+        insn, lexem_list = self.parse_insn_from_list(lexem_list)
+        dst_reg, lexem_list = self.parse_register_from_list(lexem_list)
+        lhs, lexem_list = self.parse_register_from_list(lexem_list)
+        rhs, lexem_list = self.parse_register_from_list(lexem_list)
+        insn_object = Instruction("movefo", use_list=(lhs + rhs), def_list=dst_reg)
+        return insn_object, lexem_list
+
+    def parse_mofeva_from_list(self, lexem_list):
+        insn, lexem_list = self.parse_insn_from_list(lexem_list)
+        dst_reg, lexem_list = self.parse_register_from_list(lexem_list)
+        lhs, lexem_list = self.parse_register_from_list(lexem_list)
+        insn_object = Instruction("movefa", use_list=(lhs), def_list=dst_reg)
         return insn_object, lexem_list
 
 class LiveRange:
@@ -318,16 +330,39 @@ class PostProgram:
     def __repr__(self):
         return "PostProgram"
 
-class LiveRangeMap(dict):
+class LiveRangeMap(object):
+    def __init__(self, reg_class_list):
+        self.liverange_map = dict((reg_class, {}) for reg_class in reg_class_list)
+
+    def __contains__(self, key):
+        return key in self.liverange_map[key.reg_class]
+
+    def __getitem__(self, key):
+        return self.liverange_map[key.reg_class][key]
+
+    def __setitem__(self, key, value):
+        self.liverange_map[key.reg_class][key] = value
+
+    def get_class_list(self):
+        """ return the list of register classes """
+        return list(self.liverange_map.keys())
+
+    def get_class_map(self, reg_class):
+        """ return the sub-dict of liveranges of registers of class @p reg_class """
+        return self.liverange_map[reg_class]
+
+    def get_all_registers(self):
+        return sum([list(self.liverange_map[reg_class].keys()) for reg_class in self.liverange_map], [])
+
     def declare_pre_defined_reg(self, reg):
         """ declare a register which is alive before program starts """
-        if not reg in self:
-            self[reg] = [LiveRange()]
-        self[reg][-1].update_start(-1, DebugObject("before program starts"))
+        if not reg in self.liverange_map[reg.reg_class]:
+            self.liverange_map[reg.reg_class][reg] = [LiveRange()]
+        self.liverange_map[reg.reg_class][reg][-1].update_start(-1, DebugObject("before program starts"))
     def declare_post_used_reg(self, reg):
-        if not reg in self:
-            self[reg] = [LiveRange()]
-        self[reg][-1].update_stop(PostProgram(), DebugObject("after program ends"))
+        if not reg in self.liverange_map[reg.reg_class]:
+            self.liverange_map[reg.reg_class][reg] = [LiveRange()]
+        self.liverange_map[reg.reg_class][reg][-1].update_stop(PostProgram(), DebugObject("after program ends"))
 
 class RegisterAssignator:
     def __init__(self, arch):
@@ -340,18 +375,13 @@ class RegisterAssignator:
         """ generate a dict key -> list of disjoint live-ranges
             mapping each variable to its liverange """
         for index, bundle in enumerate(bundle_list):
-            print(index, bundle)
             for insn in bundle.insn_list:
-                print("uses in {}".format(insn.use_list))
                 for reg in insn.use_list:
-                    print(reg)
                     if not reg in liverange_map:
                         liverange_map[reg] = [LiveRange()]
                     # we update the last inserted LiveRange object in reg's list
                     liverange_map[reg][-1].update_stop(index, dbg_object=insn.dbg_object)
-                print("defs in {}".format(insn.def_list))
                 for reg in insn.def_list:
-                    print(reg)
                     if not reg in liverange_map:
                         liverange_map[reg] = []
                     if not(len(liverange_map[reg]) and liverange_map[reg][-1].start == index): 
@@ -361,7 +391,7 @@ class RegisterAssignator:
 
     def check_liverange_map(self, liverange_map):
         error_count = 0
-        for reg in liverange_map:
+        for reg in liverange_map.get_all_registers():
             for liverange in liverange_map[reg]:
                 if liverange.start == None and liverange.stop != None:
                     if liverange.stop_dbg_object is None:
@@ -377,45 +407,52 @@ class RegisterAssignator:
                     error_count += 1
         return error_count == 0
 
-    def create_intersection_map(self, liverange_map):
+    def create_conflict_map(self, liverange_map):
         """ Build the graph of liverange intersection from the
             liverange_map """
         conflict_map = {}
-        for reg in liverange_map:
-            conflict_map[reg] = set()
-            for reg2 in liverange_map:
-                if reg2 != reg and LiveRange.intersect_list(liverange_map[reg], liverange_map[reg2]):
-                    conflict_map[reg].add(reg2)
+        for reg_class in liverange_map.get_class_list():
+            sub_liverange_map = liverange_map.get_class_map(reg_class)
+            conflict_map[reg_class] = {}
+            for reg in sub_liverange_map:
+                conflict_map[reg_class][reg] = set()
+                for reg2 in sub_liverange_map:
+                    if reg2 != reg and LiveRange.intersect_list(sub_liverange_map[reg], sub_liverange_map[reg2]):
+                        conflict_map[reg_class][reg].add(reg2)
         return conflict_map
 
-    def color_graph(self, graph):
+    def create_color_map(self, conflict_map):
         max_color_num = 0
         max_degree = 0
         max_degree_node = None
 
-        color_map = {}
+        general_color_map = {}
 
         # start by pre-assigning colors to corresponding physical registers
-        for reg in graph:
-            if isinstance(reg, ArchRegister):
-                color_map[reg] = reg.index
+        for reg_class in conflict_map:
+            graph = conflict_map[reg_class]
+            color_map = {}
+            general_color_map[reg_class] = color_map
+            for reg in graph:
+                if isinstance(reg, ArchRegister):
+                    color_map[reg] = reg.index
 
-        while len(color_map) != len(graph):
-            # looking for node with max degree
-            max_reg = max([node for node in graph if not node in color_map], key=(lambda reg: len(list(node for node in graph[reg] if not node in color_map))))
-            unavailable_color_list = sorted([color_map[neighbour] for neighbour in graph[max_reg] if neighbour in color_map])
+            while len(color_map) != len(graph):
+                # looking for node with max degree
+                max_reg = max([node for node in graph if not node in color_map], key=(lambda reg: len(list(node for node in graph[reg] if not node in color_map))))
+                unavailable_color_list = sorted([color_map[neighbour] for neighbour in graph[max_reg] if neighbour in color_map])
 
-            new_color = min(set(range(64)).difference(set(unavailable_color_list)))
+                new_color = min(set(range(64)).difference(set(unavailable_color_list)))
 
-            print("register {} has been assigned color {}".format(max_reg, new_color))
-            color_map[max_reg] = new_color
+                print("register {} of class {} has been assigned color {}".format(max_reg, reg_class.name, new_color))
+                color_map[max_reg] = new_color
 
-        return color_map
+        return general_color_map
 
-    def check_color_map(self, graph, color_map):
-        for reg in graph:
+    def check_color_map(self, conflict_graph, color_map):
+        for reg in conflict_graph:
             reg_color = color_map[reg]
-            for neighbour in graph[reg]:
+            for neighbour in conflict_graph[reg]:
                 if reg_color == color_map[neighbour]:
                     print("color conflict for {}({}) vs {}({})".format(reg, reg_color, neighbour, color_map[neighbour]))
                     return False
@@ -428,9 +465,13 @@ test_string = """\
 add $r4 = $r5, $r5
 ld $r4 = $r4[$r12]
 ;;
-add R(add) = $r2, $r1
+movefo A(acc) = $r4, $r2
 ;;
-add $r3 = R(add), $r1
+add R(add) = $r1, $r1
+;;
+movefa $r2 = A(acc)
+;;
+add $r3 = R(add), $r2
 ld $r4 = $r2[$r12]
 ;;
 add R(beta) = $r4, $r3
@@ -453,7 +494,7 @@ if __name__ == "__main__":
     print("Register Assignation")
     reg_assignator = RegisterAssignator(arch)
 
-    empty_liverange_map = LiveRangeMap()
+    empty_liverange_map = LiveRangeMap([Register.Std, Register.Acc])
     print("Declaring pre-defined registers")
     for reg_index in [5, 1, 2, 12]:
         reg = arch.get_unique_reg_object(reg_index, reg_class=Register.Std)
@@ -464,14 +505,23 @@ if __name__ == "__main__":
     print("Declaring post-used registers")
     for reg_index in [0]:
         reg = arch.get_unique_reg_object(reg_index, reg_class=Register.Std)
-        empty_liverange_map.declare_post_used_reg(reg)
+        liverange_map.declare_post_used_reg(reg)
     print(liverange_map)
 
     print("Checking liveranges")
-    print(reg_assignator.check_liverange_map(liverange_map))
+    liverange_status = reg_assignator.check_liverange_map(liverange_map)
+    print(liverange_status)
+    if not liverange_status:
+        sys.exit(1)
 
     print("Graph coloring")
-    intersection_map = reg_assignator.create_intersection_map(liverange_map)
-    intersection_graph = reg_assignator.color_graph(intersection_map)
-    print(reg_assignator.check_color_map(intersection_map, intersection_graph))
+    conflict_map = reg_assignator.create_conflict_map(liverange_map)
+    color_map = reg_assignator.create_color_map(conflict_map)
+    for reg_class in conflict_map:
+        conflict_graph = conflict_map[reg_class]
+        class_color_map = color_map[reg_class]
+        check_status = reg_assignator.check_color_map(conflict_graph, class_color_map)
+        if not check_status:
+            print("register assignation for class {} does is not valid")
+            sys.exit(1)
 
