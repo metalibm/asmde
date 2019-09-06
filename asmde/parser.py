@@ -80,36 +80,46 @@ class Bundle:
     def __repr__(self):
         return "Bundle({})".format(self.insn_list)
 
+
+class RegFileDescription:
+    def __init__(self, reg_class, num_phys_reg, reg_ctor, virtual_reg_ctor):
+        self.reg_class = reg_class
+        self.num_phys_reg = num_phys_reg
+        self.reg_ctor = reg_ctor
+        self.virtual_reg_ctor = virtual_reg_ctor
+
+class RegFile:
+    def __init__(self, description):
+        self.description = description
+        self.physical_pool = dict((i, self.description.reg_ctor(i, description.reg_class)) for i in range(self.description.num_phys_reg))
+        self.virtual_pool = {}
+
+    def get_unique_phys_reg_object(self, index):
+        if index > self.description.num_phys_reg:
+            print("regfile for class {} contains only {} register(s), request for index: {}".format(self.description.reg_class.name, self.description.num_phys_reg.num_phys_reg, index))
+            sys.exit(1)
+        return self.physical_pool[index]
+
+    def get_unique_virt_reg_object(self, var_name):
+        if not var_name in self.virtual_pool:
+            self.virtual_pool[var_name] = VirtualRegister(var_name, self.description.reg_class)
+        return self.virtual_pool[var_name]
+
+    def get_max_phys_register_index(self):
+        return self.description.num_phys_reg - 1
+
 class Architecture:
-    def __init__(self):
-        pass
+    def __init__(self, reg_file_description_set):
+        self.reg_pool = dict((reg_desc.reg_class, RegFile(reg_desc)) for reg_desc in reg_file_description_set)
 
-    def get_unique_reg_object(self, index, reg_class):
-        raise NotImplementedError
-    def get_unique_virt_reg_object(self, var_name, reg_class):
-        raise NotImplementedError
+    def get_max_register_index_by_class(self, reg_class):
+        return self.reg_pool[reg_class].get_max_phys_register_index()
 
-class DummyArchitecture(Architecture):
-    def __init__(self):
-        self.physical_register_pool = {
-            ArchRegister.Std:
-                dict((i, ArchRegister(i, ArchRegister.Std)) for i in range(64)),
-            ArchRegister.Acc:
-                dict((i, ArchRegister(i, ArchRegister.Acc)) for i in range(48)),
-        }
-        self.virtual_register_pool = {
-            ArchRegister.Std: {},
-            ArchRegister.Acc: {},
-
-        }
-
-    def get_unique_reg_object(self, index, reg_class):
-        return self.physical_register_pool[reg_class][index]
+    def get_unique_phys_reg_object(self, index, reg_class):
+        return self.reg_pool[reg_class].get_unique_phys_reg_object(index)
 
     def get_unique_virt_reg_object(self, var_name, reg_class):
-        if not var_name in self.virtual_register_pool[reg_class]:
-            self.virtual_register_pool[reg_class][var_name] = VirtualRegister(var_name, reg_class)
-        return self.virtual_register_pool[reg_class][var_name]
+        return self.reg_pool[reg_class].get_unique_virt_reg_object(var_name)
 
 class AsmParser:
     def __init__(self, arch):
@@ -185,9 +195,9 @@ class AsmParser:
         sub_reg_num = len(index_range)
 
         if re.fullmatch(STD_REG_PATTERN, lexem.value):
-            register_list = [self.arch.get_unique_reg_object(index, ArchRegister.Std) for index in index_range]
+            register_list = [self.arch.get_unique_phys_reg_object(index, ArchRegister.Std) for index in index_range]
         elif re.fullmatch(ACC_REG_PATTERN, lexem.value):
-            register_list = [self.arch.get_unique_reg_object(index, ArchRegister.Acc) for index in index_range]
+            register_list = [self.arch.get_unique_phys_reg_object(index, ArchRegister.Acc) for index in index_range]
         else:
             raise NotImplementedError
 
@@ -290,10 +300,6 @@ class LiveRange:
                     return True
         return False
 
-
-class RegisterPool:
-    def __init__(self, size):
-        pass
 
 def liverange_bound_compare_gt(lhs, rhs):
     if isinstance(lhs, PostProgram):
@@ -446,6 +452,9 @@ class RegisterAssignator:
 
                 print("register {} of class {} has been assigned color {}".format(max_reg, reg_class.name, new_color))
                 color_map[max_reg] = new_color
+                num_reg_in_class = self.arch.get_max_register_index_by_class(reg_class)
+                if new_color >= num_reg_in_class:
+                    print("Error while assigning register of class {}, requesting index {}, only {} register(s) available".format(reg_class.name, new_color, num_reg_in_class)) 
 
         return general_color_map
 
@@ -481,7 +490,12 @@ add $r0 = R(beta), R(add)
 """
 
 if __name__ == "__main__":
-    arch = DummyArchitecture()
+    arch = Architecture(
+        set([
+            RegFileDescription(Register.Std, 64, ArchRegister, VirtualRegister),
+            RegFileDescription(Register.Acc, 48, ArchRegister, VirtualRegister)
+        ])
+    )
     asm_parser = AsmParser(arch)
 
     print("parsing input program")
@@ -497,14 +511,14 @@ if __name__ == "__main__":
     empty_liverange_map = LiveRangeMap([Register.Std, Register.Acc])
     print("Declaring pre-defined registers")
     for reg_index in [5, 1, 2, 12]:
-        reg = arch.get_unique_reg_object(reg_index, reg_class=Register.Std)
+        reg = arch.get_unique_phys_reg_object(reg_index, reg_class=Register.Std)
         empty_liverange_map.declare_pre_defined_reg(reg)
 
     liverange_map = reg_assignator.generate_liverange_map(asm_parser.program, empty_liverange_map)
 
     print("Declaring post-used registers")
     for reg_index in [0]:
-        reg = arch.get_unique_reg_object(reg_index, reg_class=Register.Std)
+        reg = arch.get_unique_phys_reg_object(reg_index, reg_class=Register.Std)
         liverange_map.declare_post_used_reg(reg)
     print(liverange_map)
 
