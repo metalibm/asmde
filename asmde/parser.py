@@ -2,13 +2,14 @@
 
 import re
 import sys
+import argparse
 
 import lexer
 
 from lexer import (
     Lexem, VirtualRegisterLexem, RegisterLexem,
     ImmediateLexem, OperatorLexem,
-    BundleSeparatorLexem
+    BundleSeparatorLexem, MacroLexem,
 )
 
 class Register:
@@ -121,18 +122,32 @@ class Architecture:
     def get_unique_virt_reg_object(self, var_name, reg_class):
         return self.reg_pool[reg_class].get_unique_virt_reg_object(var_name)
 
+    def get_empty_liverange_map(self):
+        return LiveRangeMap(self.reg_pool.keys())
+
+class Program:
+    def __init__(self, pre_defined_list=None, post_used_list=None):
+        self.pre_defined_list = [] if pre_defined_list is None else pre_defined_list
+        self.post_used_list = [] if post_used_list is None else post_used_list
+        self.bundle_list = []
+
+    def add_bundle(self, bundle):
+        self.bundle_list.append(bundle)
+
 class AsmParser:
-    def __init__(self, arch):
+    def __init__(self, arch, program):
         self.ongoing_bundle = Bundle()
-        self.program = []
+        self.program = program
         self.arch = arch
 
     def parse_asm_line(self, lexem_list, dbg_object):
         if not len(lexem_list): return
         head = lexem_list[0]
         if isinstance(head, BundleSeparatorLexem):
-            self.program.append(self.ongoing_bundle)
+            self.program.add_bundle(self.ongoing_bundle)
             self.ongoing_bundle = Bundle()
+        elif isinstance(head, MacroLexem):
+            self.parse_macro(lexem_list[1:], dbg_object)
         elif isinstance(head, Lexem):
             INSN_PARSING_MAP = {
                 "ld": self.parse_load_from_list,
@@ -150,6 +165,27 @@ class AsmParser:
         else:
             raise NotImplementedError
 
+    def parse_macro(self, lexem_list, dbg_object):
+        """ parse macro line once '//#' has been consumed """
+        macro_name = lexem_list[0]
+        lexem_list = lexem_list[1:]
+        register_list = []
+        while len(lexem_list):
+            sub_reg_list, lexem_list = self.parse_register_from_list(lexem_list)
+            register_list = register_list + sub_reg_list
+
+        if macro_name.value == "PREDEFINED":
+            print("adding {} to list of pre-defined registers".format(register_list))
+            self.program.pre_defined_list += register_list
+
+        elif macro_name.value == "POSTUSED":
+            print("adding {} to list of post-used registers".format(register_list))
+            self.program.post_used_list += register_list
+
+        else:
+            print("unknown macro {} @ {} ".format(macro_name.value, dbg_object))
+            #Error
+            sys.exit(1)
 
     def parse_insn_from_list(self, lexem_list):
         insn = lexem_list[0]
@@ -373,6 +409,14 @@ class LiveRangeMap(object):
             self.liverange_map[reg.reg_class][reg] = [LiveRange()]
         self.liverange_map[reg.reg_class][reg][-1].update_stop(PostProgram(), DebugObject("after program ends"))
 
+    def populate_pre_defined_list(self, program):
+        for reg in program.pre_defined_list:
+            self.declare_pre_defined_reg(reg)
+
+    def populate_post_used_list(self, program):
+        for reg in program.post_used_list:
+            self.declare_post_used_reg(reg)
+
 class RegisterAssignator:
     def __init__(self, arch):
         self.arch = arch
@@ -380,10 +424,10 @@ class RegisterAssignator:
     def process_program(self, bundle_list):
         pass
 
-    def generate_liverange_map(self, bundle_list, liverange_map):
+    def generate_liverange_map(self, program, liverange_map):
         """ generate a dict key -> list of disjoint live-ranges
             mapping each variable to its liverange """
-        for index, bundle in enumerate(bundle_list):
+        for index, bundle in enumerate(program.bundle_list):
             for insn in bundle.insn_list:
                 for reg in insn.use_list:
                     if not reg in liverange_map:
@@ -474,6 +518,7 @@ class RegisterAssignator:
 
 
 test_string = """\
+//#PREDEFINED $r5, $r2, $r1, $r12
 add R(p) = $r5, $r5
 ld R(p) = R(p)[$r12]
 ;;
@@ -490,39 +535,44 @@ add R(beta) = R(p), $r3
 ;;
 add $r0 = R(beta), R(add)
 ;;
+//#POSTUSED $r0
 """
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--lexer-verbose", action="store_const", default=False, const=True, help="enable lexer verbosity")
+    args = parser.parse_args()
+
     arch = Architecture(
         set([
             RegFileDescription(Register.Std, 64, ArchRegister, VirtualRegister),
             RegFileDescription(Register.Acc, 48, ArchRegister, VirtualRegister)
         ])
     )
-    asm_parser = AsmParser(arch)
+    program = Program()
+    asm_parser = AsmParser(arch, program)
 
     print("parsing input program")
     for line_no, line in enumerate(test_string.split("\n")):
         lexem_list = lexer.generate_line_lexems(line)
+        if args.lexer_verbose:
+            print(lexem_list)
         dbg_object = DebugObject(line_no)
         asm_parser.parse_asm_line(lexem_list, dbg_object=dbg_object)
-    print(asm_parser.program)
+    print(asm_parser.program.bundle_list)
 
     print("Register Assignation")
     reg_assignator = RegisterAssignator(arch)
 
-    empty_liverange_map = LiveRangeMap([Register.Std, Register.Acc])
+    empty_liverange_map = arch.get_empty_liverange_map()
+
     print("Declaring pre-defined registers")
-    for reg_index in [5, 1, 2, 12]:
-        reg = arch.get_unique_phys_reg_object(reg_index, reg_class=Register.Std)
-        empty_liverange_map.declare_pre_defined_reg(reg)
+    empty_liverange_map.populate_pre_defined_list(program)
 
     liverange_map = reg_assignator.generate_liverange_map(asm_parser.program, empty_liverange_map)
 
     print("Declaring post-used registers")
-    for reg_index in [0]:
-        reg = arch.get_unique_phys_reg_object(reg_index, reg_class=Register.Std)
-        liverange_map.declare_post_used_reg(reg)
+    liverange_map.populate_post_used_list(program)
     print(liverange_map)
 
     print("Checking liveranges")
