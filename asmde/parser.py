@@ -37,10 +37,39 @@ class ArchRegister(Register):
             return "$a{}".format(self.index)
         return "ArchRegister(index={}, class={})".format(self.index, self.reg_class)
 
+# linked register
+# register that must be assigned while enforcing a common constraint
+# (e.g. contiguous)
+
+def no_constraint(index):
+    return True
+
+def odd_indexed_register(index):
+    return (index % 2) == 1
+def even_indexed_register(index):
+    return (index % 2) == 0
+def contiguous_registers(index_src, index_linked):
+    return abs(index_src - index_linked) == 1
+def next_registers(index_src, index_linked):
+    return index_src == (index_linked - 1)
+
 class VirtualRegister(Register):
-    def __init__(self, name, reg_class=None):
+    def __init__(self, name, reg_class=None, constraint=no_constraint, linked_registers=None):
         self.name = name
         self.reg_class = reg_class
+        # predicate to be enforced when assigning a physical register index
+        # to this virtual register: lambda index: bool
+        self.constraint = constraint
+        # list of pairs (register, index_generator)
+        # where index_generator is lambda color_map: list which generates a iist of
+        # possible valid indexes for self register
+        self.linked_registers = {} if linked_registers is None else linked_registers
+
+    def get_linked_map(self):
+        return self.linked_registers
+
+    def add_linked_register(self, reg, index_generator):
+        self.linked_registers[reg] = index_generator
 
     def __repr__(self):
         if self.reg_class is Register.Std:
@@ -97,13 +126,13 @@ class RegFile:
 
     def get_unique_phys_reg_object(self, index):
         if index > self.description.num_phys_reg:
-            print("regfile for class {} contains only {} register(s), request for index: {}".format(self.description.reg_class.name, self.description.num_phys_reg.num_phys_reg, index))
+            print("regfile for class {} contains only {} register(s), request for index: {}".format(self.description.reg_class.name, self.description.num_phys_reg, index))
             sys.exit(1)
         return self.physical_pool[index]
 
-    def get_unique_virt_reg_object(self, var_name):
+    def get_unique_virt_reg_object(self, var_name, reg_constraint=no_constraint):
         if not var_name in self.virtual_pool:
-            self.virtual_pool[var_name] = VirtualRegister(var_name, self.description.reg_class)
+            self.virtual_pool[var_name] = VirtualRegister(var_name, self.description.reg_class, constraint=reg_constraint)
         return self.virtual_pool[var_name]
 
     def get_max_phys_register_index(self):
@@ -119,8 +148,8 @@ class Architecture:
     def get_unique_phys_reg_object(self, index, reg_class):
         return self.reg_pool[reg_class].get_unique_phys_reg_object(index)
 
-    def get_unique_virt_reg_object(self, var_name, reg_class):
-        return self.reg_pool[reg_class].get_unique_virt_reg_object(var_name)
+    def get_unique_virt_reg_object(self, var_name, reg_class, reg_constraint=no_constraint):
+        return self.reg_pool[reg_class].get_unique_virt_reg_object(var_name, reg_constraint=reg_constraint)
 
     def get_empty_liverange_map(self):
         return LiveRangeMap(self.reg_pool.keys())
@@ -152,6 +181,7 @@ class AsmParser:
             INSN_PARSING_MAP = {
                 "ld": self.parse_load_from_list,
                 "add": self.parse_add_from_list,
+                "addd": self.parse_addd_from_list,
                 "movefa": self.parse_mofeva_from_list,
                 "movefo": self.parse_mofevo_from_list,
             }
@@ -201,17 +231,30 @@ class AsmParser:
             register encoded in lexem """
         assert isinstance(lexem, VirtualRegisterLexem)
 
-        VIRTUAL_REG_PATTERN = "(?P<var_type>[RDQOABCD])\((?P<var_name>\w+)\)"
+        VIRTUAL_REG_PATTERN = "(?P<var_type>[RDQOABCD])\((?P<var_name_list>[\w:]+)\)"
         reg_match = re.match(VIRTUAL_REG_PATTERN, lexem.value)
         reg_type = reg_match.group("var_type")
-        reg_name = reg_match.group("var_name")
+        reg_name_list = reg_match.group("var_name_list")
 
-        reg_class = {
+        simple_reg_class = {
             "R": Register.Std,
             "A": Register.Acc
-        }[reg_type]
-        return [self.arch.get_unique_virt_reg_object(reg_name, reg_class=reg_class)]
-
+        }
+        if reg_type in simple_reg_class:
+            reg_class = simple_reg_class[reg_type]
+            reg_name = reg_name_list
+            return [self.arch.get_unique_virt_reg_object(reg_name, reg_class=reg_class)]
+        else:
+            multi_reg_name = reg_name_list.split(":")
+            if reg_type == "D":
+                lo_reg = self.arch.get_unique_virt_reg_object(multi_reg_name[0], reg_class=Register.Std, reg_constraint=even_indexed_register)
+                hi_reg = self.arch.get_unique_virt_reg_object(multi_reg_name[1], reg_class=Register.Std, reg_constraint=odd_indexed_register)
+                lo_reg.add_linked_register(hi_reg, lambda color_map: [color_map[hi_reg] - 1])
+                hi_reg.add_linked_register(lo_reg, lambda color_map: [color_map[lo_reg] + 1])
+                return [lo_reg, hi_reg]
+            else:
+                print("unsupported register-class {}".format(reg_type))
+                raise NotImplementedError
 
     def parse_register(self, lexem):
         """ extract the lexem register representing a list of registers
@@ -286,6 +329,14 @@ class AsmParser:
         lhs, lexem_list = self.parse_register_from_list(lexem_list)
         rhs, lexem_list = self.parse_register_from_list(lexem_list)
         insn_object = Instruction("add", use_list=(lhs + rhs), def_list=dst_reg)
+        return insn_object, lexem_list
+
+    def parse_addd_from_list(self, lexem_list):
+        insn, lexem_list = self.parse_insn_from_list(lexem_list)
+        dst_reg, lexem_list = self.parse_register_from_list(lexem_list)
+        lhs, lexem_list = self.parse_register_from_list(lexem_list)
+        rhs, lexem_list = self.parse_register_from_list(lexem_list)
+        insn_object = Instruction("addd", use_list=(lhs + rhs), def_list=dst_reg)
         return insn_object, lexem_list
 
     def parse_mofevo_from_list(self, lexem_list):
@@ -493,15 +544,88 @@ class RegisterAssignator:
             while len(color_map) != len(graph):
                 # looking for node with max degree
                 max_reg = max([node for node in graph if not node in color_map], key=(lambda reg: len(list(node for node in graph[reg] if not node in color_map))))
-                unavailable_color_list = sorted([color_map[neighbour] for neighbour in graph[max_reg] if neighbour in color_map])
+                # if selected register is linked, we must allocated all the
+                # register at once to ensure link constraints are met
+                #selected_reg_list = [max_reg] + max_get.get_linked_list()
 
-                new_color = min(set(range(64)).difference(set(unavailable_color_list)))
+                def allocate_reg_list(reg_list, graph, color_map):
+                    """ Allocate each register in reg_list assuming dependencies
+                        are stored in graph and color_map indicates previously performed
+                        allocation """
+                    # print("allocate_reg_list: {}".format(reg_list))
+                    if len(reg_list) == 0:
+                        # empty list returns empty allocation (valid)
+                        return {}
+                    else:
+                        head_reg = reg_list[0]
+                        remaining_reg_list = reg_list[1:]
+                        unavailable_color_set = set([color_map[neighbour] for neighbour in graph[head_reg] if neighbour in color_map])
+                        # TODO/FIXME need to generate available_color_set based
+                        # on register constraint
+                        valid_color_set = [color for color in range(arch.reg_pool[reg_class].description.num_phys_reg) if head_reg.constraint(color)]
+                        available_color_set = set(valid_color_set).difference(set(unavailable_color_set))
 
-                print("register {} of class {} has been assigned color {}".format(max_reg, reg_class.name, new_color))
-                color_map[max_reg] = new_color
+                        # enforcing link constraints
+                        linked_map = head_reg.get_linked_map()
+                        for linked_reg in linked_map:
+                            if not linked_reg in color_map:
+                                # discard linked registers which have not been allocated yet
+                                continue
+                            else:
+                                available_color_set.intersection_update(set(linked_map[linked_reg](color_map)))
+                        if not len(available_color_set):
+                            # no color available
+                            return None
+                        for possible_color in available_color_set:
+                            # FIXME: bad performance: copying full local dict each time
+                            local_color_map = {head_reg: possible_color}
+                            local_color_map.update(color_map)
+                            sub_allocation = allocate_reg_list(remaining_reg_list, graph, local_color_map)
+                            if sub_allocation != None:
+                                # valid sub allocation
+                                sub_allocation.update({head_reg: possible_color})
+                                # return first valid sub-alloc
+                                return sub_allocation
+                                
+                        return None
+                # FIXME/TODO: build full set of linked registers (recursively)
+
+                linked_allocation = allocate_reg_list([max_reg] + list(max_reg.get_linked_map().keys()), graph, color_map)
+                if linked_allocation is None:
+                    print("no feasible allocation for {} and linked map {}".format(max_reg, max_reg.get_linked_map()))
+                    sys.exit(1)
+
+                #unavailable_color_set = set([color_map[neighbour] for neighbour in graph[max_reg] if neighbour in color_map])
+                #available_color_set = set(range(arch.reg_pool[reg_class].description.num_phys_reg)).difference(set(unavailable_color_set))
+                #for possible_color in available_color_set:
+                #    # check if there is an available color for each linked register
+                #    linked_reg_alloc_list = []
+                #    for linked_reg, index_generator in max_reg.get_linked_list():
+                #        linked_color_valid_set = set()
+                #        for linked_color in index_generator(possible_color):
+                #            if not linked_color in [color_map[neighbour] for neighbour in graph[linked_reg] if linked_reg in graph]:
+                #                linked_color_valid_set.append(linked_color)
+                #        linked_reg_alloc.append((linked_reg, linked_color_valid_set))
+                #    if any(len(linked_reg_alloc[1]) == 0 for linked_reg_alloc in linked_reg_alloc_list):
+                #        # at least one linked register could not be allocated
+                #        continue
+
+                #        
+
+                #new_color = min(set(range(arch.reg_pool[reg_class].description.num_phys_reg)).difference(set(unavailable_color_list)))
+
+                # print("register {} of class {} has been assigned color {}".format(max_reg, reg_class.name, new_color))
                 num_reg_in_class = self.arch.get_max_register_index_by_class(reg_class)
-                if new_color >= num_reg_in_class:
-                    print("Error while assigning register of class {}, requesting index {}, only {} register(s) available".format(reg_class.name, new_color, num_reg_in_class)) 
+                for linked_reg in linked_allocation:
+                    linked_color =  linked_allocation[linked_reg]
+                    color_map[linked_reg] = linked_color
+                    print("register {} of class {} has been assigned color {}".format(linked_reg, reg_class.name, linked_color))
+                    # check on colour bound
+                    if linked_color >= num_reg_in_class:
+                        print("Error while assigning register of class {}, requesting index {}, only {} register(s) available".format(reg_class.name, linked_color, num_reg_in_class)) 
+                # color_map[max_reg] = new_color
+                #if new_color >= num_reg_in_class:
+                #    print("Error while assigning register of class {}, requesting index {}, only {} register(s) available".format(reg_class.name, new_color, num_reg_in_class)) 
 
         return general_color_map
 
@@ -526,16 +650,20 @@ movefo A(acc) = R(p), $r2
 ;;
 add R(add) = $r1, $r1
 ;;
+addd D(d_lo:d_hi) = $r1, $r1
+;;
+addd $r6r7 = R(d_hi), R(d_lo)
+;;
 movefa $r2 = A(acc)
 ;;
-add $r3 = R(add), $r2
+add $r3 = R(add), $r6
 ld R(p) = $r2[$r12]
 ;;
 add R(beta) = R(p), $r3
 ;;
 add $r0 = R(beta), R(add)
 ;;
-//#POSTUSED $r0
+//#POSTUSED $r0, $r7
 """
 
 if __name__ == "__main__":
@@ -545,8 +673,8 @@ if __name__ == "__main__":
 
     arch = Architecture(
         set([
-            RegFileDescription(Register.Std, 64, ArchRegister, VirtualRegister),
-            RegFileDescription(Register.Acc, 48, ArchRegister, VirtualRegister)
+            RegFileDescription(Register.Std, 16, ArchRegister, VirtualRegister),
+            RegFileDescription(Register.Acc, 4, ArchRegister, VirtualRegister)
         ])
     )
     program = Program()

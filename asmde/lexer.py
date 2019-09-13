@@ -34,7 +34,7 @@ class BundleSeparatorLexem(Lexem):
     PATTERN = ";;"
 
 class VirtualRegisterLexem(Lexem):
-    PATTERN = "[RDQOABD]\(\w+\)"
+    PATTERN = "[RDQOABD]\([\w:]+\)"
 
 class MacroLexem(Lexem):
     PATTERN = "\/\/#"
