@@ -48,10 +48,6 @@ def odd_indexed_register(index):
     return (index % 2) == 1
 def even_indexed_register(index):
     return (index % 2) == 0
-def contiguous_registers(index_src, index_linked):
-    return abs(index_src - index_linked) == 1
-def next_registers(index_src, index_linked):
-    return index_src == (index_linked - 1)
 
 class VirtualRegister(Register):
     def __init__(self, name, reg_class=None, constraint=no_constraint, linked_registers=None):
@@ -544,24 +540,19 @@ class RegisterAssignator:
             while len(color_map) != len(graph):
                 # looking for node with max degree
                 max_reg = max([node for node in graph if not node in color_map], key=(lambda reg: len(list(node for node in graph[reg] if not node in color_map))))
-                # if selected register is linked, we must allocated all the
-                # register at once to ensure link constraints are met
-                #selected_reg_list = [max_reg] + max_get.get_linked_list()
 
                 def allocate_reg_list(reg_list, graph, color_map):
                     """ Allocate each register in reg_list assuming dependencies
                         are stored in graph and color_map indicates previously performed
                         allocation """
-                    # print("allocate_reg_list: {}".format(reg_list))
                     if len(reg_list) == 0:
                         # empty list returns empty allocation (valid)
                         return {}
                     else:
+                        # select head of list as current register for allocation
                         head_reg = reg_list[0]
                         remaining_reg_list = reg_list[1:]
                         unavailable_color_set = set([color_map[neighbour] for neighbour in graph[head_reg] if neighbour in color_map])
-                        # TODO/FIXME need to generate available_color_set based
-                        # on register constraint
                         valid_color_set = [color for color in range(arch.reg_pool[reg_class].description.num_phys_reg) if head_reg.constraint(color)]
                         available_color_set = set(valid_color_set).difference(set(unavailable_color_set))
 
@@ -586,46 +577,27 @@ class RegisterAssignator:
                                 sub_allocation.update({head_reg: possible_color})
                                 # return first valid sub-alloc
                                 return sub_allocation
-                                
+
                         return None
                 # FIXME/TODO: build full set of linked registers (recursively)
 
+                # if selected register is linked, we must allocated all the
+                # register at once to ensure link constraints are met
                 linked_allocation = allocate_reg_list([max_reg] + list(max_reg.get_linked_map().keys()), graph, color_map)
                 if linked_allocation is None:
                     print("no feasible allocation for {} and linked map {}".format(max_reg, max_reg.get_linked_map()))
                     sys.exit(1)
 
-                #unavailable_color_set = set([color_map[neighbour] for neighbour in graph[max_reg] if neighbour in color_map])
-                #available_color_set = set(range(arch.reg_pool[reg_class].description.num_phys_reg)).difference(set(unavailable_color_set))
-                #for possible_color in available_color_set:
-                #    # check if there is an available color for each linked register
-                #    linked_reg_alloc_list = []
-                #    for linked_reg, index_generator in max_reg.get_linked_list():
-                #        linked_color_valid_set = set()
-                #        for linked_color in index_generator(possible_color):
-                #            if not linked_color in [color_map[neighbour] for neighbour in graph[linked_reg] if linked_reg in graph]:
-                #                linked_color_valid_set.append(linked_color)
-                #        linked_reg_alloc.append((linked_reg, linked_color_valid_set))
-                #    if any(len(linked_reg_alloc[1]) == 0 for linked_reg_alloc in linked_reg_alloc_list):
-                #        # at least one linked register could not be allocated
-                #        continue
-
-                #        
-
-                #new_color = min(set(range(arch.reg_pool[reg_class].description.num_phys_reg)).difference(set(unavailable_color_list)))
-
-                # print("register {} of class {} has been assigned color {}".format(max_reg, reg_class.name, new_color))
                 num_reg_in_class = self.arch.get_max_register_index_by_class(reg_class)
                 for linked_reg in linked_allocation:
                     linked_color =  linked_allocation[linked_reg]
                     color_map[linked_reg] = linked_color
-                    print("register {} of class {} has been assigned color {}".format(linked_reg, reg_class.name, linked_color))
                     # check on colour bound
                     if linked_color >= num_reg_in_class:
                         print("Error while assigning register of class {}, requesting index {}, only {} register(s) available".format(reg_class.name, linked_color, num_reg_in_class)) 
-                # color_map[max_reg] = new_color
-                #if new_color >= num_reg_in_class:
-                #    print("Error while assigning register of class {}, requesting index {}, only {} register(s) available".format(reg_class.name, new_color, num_reg_in_class)) 
+                        sys.exit(1)
+
+                    print("register {} of class {} has been assigned color {}".format(linked_reg, reg_class.name, linked_color))
 
         return general_color_map
 
