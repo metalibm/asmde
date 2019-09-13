@@ -553,8 +553,16 @@ class RegisterAssignator:
                         head_reg = reg_list[0]
                         remaining_reg_list = reg_list[1:]
                         unavailable_color_set = set([color_map[neighbour] for neighbour in graph[head_reg] if neighbour in color_map])
+
                         valid_color_set = [color for color in range(arch.reg_pool[reg_class].description.num_phys_reg) if head_reg.constraint(color)]
+                        if not len(valid_color_set):
+                            # no color available in valid set
+                            return None
                         available_color_set = set(valid_color_set).difference(set(unavailable_color_set))
+
+                        if not len(available_color_set):
+                            # no color available in available color set
+                            return None
 
                         # enforcing link constraints
                         linked_map = head_reg.get_linked_map()
@@ -564,9 +572,6 @@ class RegisterAssignator:
                                 continue
                             else:
                                 available_color_set.intersection_update(set(linked_map[linked_reg](color_map)))
-                        if not len(available_color_set):
-                            # no color available
-                            return None
                         for possible_color in available_color_set:
                             # FIXME: bad performance: copying full local dict each time
                             local_color_map = {head_reg: possible_color}
