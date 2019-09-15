@@ -18,6 +18,10 @@ class Register:
     class Acc:
         name = "Acc"
 
+    def is_virtual(self):
+        """ predicate indicating if register is virtual (or physical) """
+        raise NotImplementedError
+
 class SubRegister:
     """ Elementary register object """
     def __init__(self, index, reg_class):
@@ -36,6 +40,9 @@ class ArchRegister(Register):
         elif self.reg_class is Register.Acc:
             return "$a{}".format(self.index)
         return "ArchRegister(index={}, class={})".format(self.index, self.reg_class)
+
+    def is_virtual(self):
+        return False
 
 # linked register
 # register that must be assigned while enforcing a common constraint
@@ -66,6 +73,9 @@ class VirtualRegister(Register):
 
     def add_linked_register(self, reg, index_generator):
         self.linked_registers[reg] = index_generator
+
+    def is_virtual(self):
+        return True
 
     def __repr__(self):
         if self.reg_class is Register.Std:
@@ -646,6 +656,8 @@ add $r0 = R(beta), R(add)
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--lexer-verbose", action="store_const", default=False, const=True, help="enable lexer verbosity")
+
+    parser.add_argument("--output", action="store", default=None, help="select output file (default stdout)")
     args = parser.parse_args()
 
     arch = Architecture(
@@ -696,4 +708,17 @@ if __name__ == "__main__":
         if not check_status:
             print("register assignation for class {} does is not valid")
             sys.exit(1)
+
+    def dump_allocation(color_map, output_callback):
+        """ dump virtual register allocation mapping """
+        for reg_class in color_map:
+            for reg in color_map[reg_class]:
+                if reg.is_virtual():
+                    output_callback("#define {} {}\n".format(reg.name, color_map[reg_class][reg]))
+
+    if args.output is None:
+        dump_allocation(color_map, lambda s: print(s, end=""))
+    else:
+        with open(args.output, "w") as output_stream:
+            dump_allocation(color_map, lambda s: output_stream.write(s))
 
