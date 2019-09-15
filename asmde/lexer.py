@@ -3,7 +3,7 @@
 import re
 
 class Lexem:
-    PATTERN = ".*"
+    PATTERN = "[\w\d]+"
 
     def __init__(self, value):
         self.value = value
@@ -28,13 +28,11 @@ class ImmediateLexem(Lexem):
     PATTERN = "([+-]|)[0-9]+"
 
 class OperatorLexem(Lexem):
-    PATTERN = "[\[\]\.]"
+    PATTERN = "[()\[\]\.]"
 
 class BundleSeparatorLexem(Lexem):
     PATTERN = ";;"
 
-class VirtualRegisterLexem(Lexem):
-    PATTERN = "[RDQOABD]\([\w:]+\)"
 
 class MacroLexem(Lexem):
     PATTERN = "\/\/#"
@@ -51,7 +49,7 @@ def generate_line_lexems(s):
     lexem_list = []
     for sub_word in re.split(SEP_PATTERN, s):
         lexem_match = None
-        for lexem_class in [MacroLexem, VirtualRegisterLexem, ImmediateLexem, RegisterLexem, OperatorLexem, BundleSeparatorLexem, Lexem]:
+        for lexem_class in [MacroLexem, ImmediateLexem, RegisterLexem, OperatorLexem, BundleSeparatorLexem, Lexem]:
             lexem_match = lexem_class.match(sub_word)
             if lexem_match is None:
                 continue
