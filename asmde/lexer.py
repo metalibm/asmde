@@ -30,6 +30,9 @@ class ImmediateLexem(Lexem):
 class OperatorLexem(Lexem):
     PATTERN = "[()\[\]\.]"
 
+class LabelEndLexem(Lexem):
+    PATTERN = ":"
+
 class BundleSeparatorLexem(Lexem):
     PATTERN = ";;"
 
@@ -49,7 +52,7 @@ def generate_line_lexems(s):
     lexem_list = []
     for sub_word in re.split(SEP_PATTERN, s):
         lexem_match = None
-        for lexem_class in [MacroLexem, ImmediateLexem, RegisterLexem, OperatorLexem, BundleSeparatorLexem, Lexem]:
+        for lexem_class in [LabelEndLexem, MacroLexem, ImmediateLexem, RegisterLexem, OperatorLexem, BundleSeparatorLexem, Lexem]:
             lexem_match = lexem_class.match(sub_word)
             if lexem_match is None:
                 continue

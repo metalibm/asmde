@@ -8,6 +8,7 @@ import lexer
 
 from lexer import (
     Lexem, RegisterLexem,
+    LabelEndLexem,
     ImmediateLexem, OperatorLexem,
     BundleSeparatorLexem, MacroLexem,
 )
@@ -115,6 +116,9 @@ class Bundle:
     def add_insn(self, insn):
         self.insn_list.append(insn)
 
+    def __len__(self):
+        return len(self.insn_list)
+
     def __repr__(self):
         return "Bundle({})".format(self.insn_list)
 
@@ -167,9 +171,19 @@ class Program:
         self.pre_defined_list = [] if pre_defined_list is None else pre_defined_list
         self.post_used_list = [] if post_used_list is None else post_used_list
         self.bundle_list = []
+        # dict <label_name> : program offset (in bundles)
+        self.label_map = {}
 
     def add_bundle(self, bundle):
         self.bundle_list.append(bundle)
+
+    def add_label(self, label, offset=None):
+        """ Declare a new label @p label, if offset is None
+            the offset associated with the label is the current program index
+            else @p offset value is used directly """
+        if offset is None:
+            offset = len(self.bundle_list)
+        self.label_map[label] = offset
 
 def NextLexem_OperatorPredicate(op_value):
     """ construct a predicate: lexem_list -> boolean
@@ -211,20 +225,27 @@ class AsmParser:
         elif isinstance(head, MacroLexem):
             self.parse_macro(lexem_list[1:], dbg_object)
         elif isinstance(head, Lexem):
-            INSN_PARSING_MAP = {
-                "ld": self.parse_load_from_list,
-                "add": self.parse_add_from_list,
-                "addd": self.parse_addd_from_list,
-                "movefa": self.parse_mofeva_from_list,
-                "movefo": self.parse_mofevo_from_list,
-            }
-            if head.value in INSN_PARSING_MAP:
-                parsing_method = INSN_PARSING_MAP[head.value]
-                insn, lexem_list = parsing_method(lexem_list)
-                insn.dbg_object = dbg_object
-                self.ongoing_bundle.add_insn(insn)
+            if isinstance(lexem_list[1], LabelEndLexem):
+                if len(self.ongoing_bundle) != 0:
+                    print("Error: label can not be inserted in the middle of a bundle @ {}".format(dbg_object))
+                    sys.exit(1)
+                self.program.add_label(head.value)
+
             else:
-                raise NotImplementedError
+                INSN_PARSING_MAP = {
+                    "ld": self.parse_load_from_list,
+                    "add": self.parse_add_from_list,
+                    "addd": self.parse_addd_from_list,
+                    "movefa": self.parse_mofeva_from_list,
+                    "movefo": self.parse_mofevo_from_list,
+                }
+                if head.value in INSN_PARSING_MAP:
+                    parsing_method = INSN_PARSING_MAP[head.value]
+                    insn, lexem_list = parsing_method(lexem_list)
+                    insn.dbg_object = dbg_object
+                    self.ongoing_bundle.add_insn(insn)
+                else:
+                    raise NotImplementedError
         else:
             raise NotImplementedError
 
@@ -675,6 +696,7 @@ movefo A(acc) = R(p), $r2
 ;;
 add R(add) = $r1, $r1
 ;;
+start_label:
 addd D(d_lo,d_hi) = $r1, $r1
 ;;
 addd $r6r7 = R(d_hi), R(d_lo)
@@ -686,6 +708,7 @@ ld R(p) = $r2[$r12]
 ;;
 add R(beta) = R(p), $r3
 ;;
+end_label:
 add $r0 = R(beta), R(add)
 ;;
 //#POSTUSED($r0, $r7)
@@ -715,6 +738,7 @@ if __name__ == "__main__":
         dbg_object = DebugObject(line_no)
         asm_parser.parse_asm_line(lexem_list, dbg_object=dbg_object)
     print(asm_parser.program.bundle_list)
+    print(asm_parser.program.label_map)
 
     print("Register Assignation")
     reg_assignator = RegisterAssignator(arch)
