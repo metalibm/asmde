@@ -686,39 +686,13 @@ class RegisterAssignator:
 
 
 
-
-test_string = """\
-//#PREDEFINED($r5, $r2, $r1, $r12)
-add R(p) = $r5, $r5
-ld R(p) = R(p)[$r12]
-;;
-movefo A(acc) = R(p), $r2
-;;
-add R(add) = $r1, $r1
-;;
-start_label:
-addd D(d_lo,d_hi) = $r1, $r1
-;;
-addd $r6r7 = R(d_hi), R(d_lo)
-;;
-movefa $r2 = A(acc)
-;;
-add $r3 = R(add), $r6
-ld R(p) = $r2[$r12]
-;;
-add R(beta) = R(p), $r3
-;;
-end_label:
-add $r0 = R(beta), R(add)
-;;
-//#POSTUSED($r0, $r7)
-"""
-
 if __name__ == "__main__":
+    # command line options
     parser = argparse.ArgumentParser()
     parser.add_argument("--lexer-verbose", action="store_const", default=False, const=True, help="enable lexer verbosity")
 
     parser.add_argument("--output", action="store", default=None, help="select output file (default stdout)")
+    parser.add_argument("--input", action="store", help="select input file")
     args = parser.parse_args()
 
     arch = Architecture(
@@ -731,14 +705,18 @@ if __name__ == "__main__":
     asm_parser = AsmParser(arch, program)
 
     print("parsing input program")
-    for line_no, line in enumerate(test_string.split("\n")):
-        lexem_list = lexer.generate_line_lexems(line)
-        if args.lexer_verbose:
-            print(lexem_list)
-        dbg_object = DebugObject(line_no)
-        asm_parser.parse_asm_line(lexem_list, dbg_object=dbg_object)
-    print(asm_parser.program.bundle_list)
-    print(asm_parser.program.label_map)
+    with open(args.input, "r") as input_stream:
+        # TODO/FIXME: optimize file reading (line by line rather than full file at once)
+        full_input_file = input_stream.read()
+        for line_no, line in enumerate(full_input_file.split("\n")):
+            lexem_list = lexer.generate_line_lexems(line)
+            if args.lexer_verbose:
+                print(lexem_list)
+            dbg_object = DebugObject(line_no)
+            asm_parser.parse_asm_line(lexem_list, dbg_object=dbg_object)
+        print(asm_parser.program.bundle_list)
+        print(asm_parser.program.label_map)
+    # manage file I/O exception
 
     print("Register Assignation")
     reg_assignator = RegisterAssignator(arch)
