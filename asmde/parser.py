@@ -8,7 +8,7 @@ import lexer
 
 from lexer import (
     Lexem, RegisterLexem,
-    LabelEndLexem,
+    LabelEndLexem, CommentHeadLexem,
     ImmediateLexem, OperatorLexem,
     BundleSeparatorLexem, MacroLexem,
 )
@@ -224,6 +224,8 @@ class AsmParser:
             self.ongoing_bundle = Bundle()
         elif isinstance(head, MacroLexem):
             self.parse_macro(lexem_list[1:], dbg_object)
+        elif isinstance(head, CommentHeadLexem):
+            pass
         elif isinstance(head, Lexem):
             if isinstance(lexem_list[1], LabelEndLexem):
                 if len(self.ongoing_bundle) != 0:

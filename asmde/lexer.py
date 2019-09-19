@@ -40,6 +40,9 @@ class BundleSeparatorLexem(Lexem):
 class MacroLexem(Lexem):
     PATTERN = "\/\/#"
 
+class CommentHeadLexem(Lexem):
+    PATTERN = "\/\/(?!#)"
+
 # extended regular expression for seperator, including
 # separators that will be included as valid lexems
 SEP_PATTERN = "([ \t,=\[\]\.])+"
@@ -52,7 +55,7 @@ def generate_line_lexems(s):
     lexem_list = []
     for sub_word in re.split(SEP_PATTERN, s):
         lexem_match = None
-        for lexem_class in [LabelEndLexem, MacroLexem, ImmediateLexem, RegisterLexem, OperatorLexem, BundleSeparatorLexem, Lexem]:
+        for lexem_class in [CommentHeadLexem, LabelEndLexem, MacroLexem, ImmediateLexem, RegisterLexem, OperatorLexem, BundleSeparatorLexem, Lexem]:
             lexem_match = lexem_class.match(sub_word)
             if lexem_match is None:
                 continue
