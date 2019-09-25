@@ -209,6 +209,193 @@ def MetaPopOperatorPredicate(op_value):
         return lexem_list[1:]
     return predicate
 
+def lexem_string_match(s):
+    def operator(lexem):
+        return isinstance(lexem, Lexem) and lexem.value == s
+    return operator
+
+def register_extract_match(ctx, lexem_list):
+    ctx.parse_register_from_list
+
+class Pattern:
+    def __init__(self, tag):
+        # pattern identifier used to distinguish between pattern instances
+        self.tag = tag
+
+    def parse(self, arch, lexem_list):
+        """ parse @p lexem_list assuming it must match pattern.
+            If it does not, returns None,
+            Else return a tuple (match result, remaining lexems list) """
+        raise NotImplementedError
+
+class VirtualRegisterPattern(Pattern):
+    @staticmethod
+    def parse(arch, lexem_list):
+        """ Try to parse a virtual register description for @p lexem_list
+            return a pair with:
+            - the list (most likely a single element) of virtual register
+              encoded in lexem
+            - a list of remaining lexems """
+        virtual_register_type_lexem = lexem_list[0]
+        lexem_list = lexem_list[1:]
+        reg_type = virtual_register_type_lexem.value
+
+        if not isinstance(virtual_register_type_lexem, Lexem) or not reg_type in "RDQOABCD":
+            # fail to match
+            return None
+            # raise Exception("expecting virtual register type macro (RDQOABCD) got {}".format(virtual_register_type_lexem))
+
+        lexem_list = MetaPopOperatorPredicate("(")(lexem_list)
+
+        reg_name_list = []
+        while isinstance(lexem_list[0], Lexem) and lexem_list[0].value != ")":
+            reg_name_list.append(lexem_list[0].value)
+            lexem_list = lexem_list[1:]
+
+        lexem_list = MetaPopOperatorPredicate(")")(lexem_list)
+
+        simple_reg_class = {
+            "R": Register.Std,
+            "A": Register.Acc
+        }
+        if reg_type in simple_reg_class:
+            reg_class = simple_reg_class[reg_type]
+            reg_name = reg_name_list[0]
+            return [arch.get_unique_virt_reg_object(reg_name, reg_class=reg_class)], lexem_list
+        else:
+            multi_reg_name = reg_name_list
+            if reg_type == "D":
+                lo_reg = arch.get_unique_virt_reg_object(multi_reg_name[0], reg_class=Register.Std, reg_constraint=even_indexed_register)
+                hi_reg = arch.get_unique_virt_reg_object(multi_reg_name[1], reg_class=Register.Std, reg_constraint=odd_indexed_register)
+                lo_reg.add_linked_register(hi_reg, lambda color_map: [color_map[hi_reg] - 1])
+                hi_reg.add_linked_register(lo_reg, lambda color_map: [color_map[lo_reg] + 1])
+                return [lo_reg, hi_reg], lexem_list
+            else:
+                print("unsupported register-class {}".format(reg_type))
+                raise NotImplementedError
+        return None
+
+class PhysicalRegisterPattern(Pattern):
+    """ pattern for physical register """
+    @staticmethod
+    def parse(arch, lexem_list):
+        if isinstance(lexem_list[0], RegisterLexem):
+            #raise Exception("RegisterLexem was expected, got: {}".format(lexem))
+            reg_lexem = lexem_list[0]
+
+            STD_REG_PATTERN = "\$([r][0-9]+){1,4}"
+            ACC_REG_PATTERN = "\$([a][0-9]+){1,4}"
+
+            index_range = [int(index) for index in re.split("\D+", reg_lexem.value) if index != ""]
+
+            if re.fullmatch(STD_REG_PATTERN, reg_lexem.value):
+                register_list = [arch.get_unique_phys_reg_object(index, ArchRegister.Std) for index in index_range]
+            elif re.fullmatch(ACC_REG_PATTERN, reg_lexem.value):
+                register_list = [arch.get_unique_phys_reg_object(index, ArchRegister.Acc) for index in index_range]
+            else:
+                raise NotImplementedError
+
+            return register_list, lexem_list[1:]
+        else:
+            # trying to parse a virtual register
+            return None
+
+
+class RegisterPattern(Pattern):
+    """ arbitrary (physical and virtual) register pattern """
+    @staticmethod
+    def parse(arch, lexem_list):
+        virtual_match = VirtualRegisterPattern.parse(arch, lexem_list)
+        if not virtual_match is None:
+            # pair (register_list, remaining lexem list)
+            return virtual_match
+        physical_match = PhysicalRegisterPattern.parse(arch, lexem_list)
+        if not physical_match is None:
+            # pair (register_list, remaining lexem list)
+            return physical_match
+        # no match
+        return None
+
+
+class OffsetPattern(Pattern):
+    """ pattern for address offset """
+    @staticmethod
+    def parse(arch, lexem_list):
+        offset_lexem = lexem_list[0]
+        if isinstance(offset_lexem, ImmediateLexem):
+            offset = ImmediateValue(int(offset_lexem.value))
+            lexem_list = lexem_list[1:]
+        elif isinstance(offset_lexem, RegisterLexem):
+            offset, lexem_list = PhysicalRegisterPattern.parse(arch, lexem_list)
+        elif isinstance(offset_lexem, Lexem):
+            offset, lexem_list = VirtualRegisterPattern.parse(arch, lexem_list)
+        else:
+            print("unrecognized lexem {} while parsing for offset".format(offset_lexem))
+            raise NotImplementedError
+        return offset, lexem_list
+
+class AddrValue:
+    def __init__(self, base=None, offset=None):
+        self.base = base
+        self.offset = offset
+
+class AddressPattern(Pattern):
+    @staticmethod
+    def parse(arch, lexem_list):
+        offset_match = OffsetPattern.parse(arch, lexem_list)
+        if offset_match is None: return None
+        offset_value, lexem_list = offset_match
+        lexem_list = MetaPopOperatorPredicate("[")(lexem_list)
+        base_match = RegisterPattern.parse(arch, lexem_list)
+        if base_match is None: return None
+        base_value, lexem_list = base_match
+        lexem_list = MetaPopOperatorPredicate("]")(lexem_list)
+        return AddrValue(base=base_value, offset=offset_value), lexem_list
+
+class OpcodePattern(Pattern):
+    def __init__(self, opcode, tag="opcode"):
+        Pattern.__init__(self, tag)
+        self.opcode = opcode
+
+    def parse(self, arch, lexem_list):
+        if len(lexem_list) == 0:
+            return None
+        else:
+            head, lexem_list = lexem_list[0], lexem_list[1:]
+            if (not isinstance(head, Lexem)) or head.value != self.opcode:
+                return None
+            return head, lexem_list
+
+
+class SequentialPattern:
+    def __init__(self, elt_pattern_list, result_builder):
+        self.elt_pattern_list = elt_pattern_list
+        # callback to build the object result from a match
+        self.result_builder = result_builder
+
+    def match(self, arch, lexem_list):
+        match_result = {}
+        for pattern in self.elt_pattern_list:
+            result = pattern.parse(arch, lexem_list)
+            if result is None:
+                print("could not match {} with {}".format(lexem_list, pattern))
+                return None
+            # retieving parse result and updating remaining list of lexems
+            value, lexem_list = result
+            if not value is None:
+                match_result[pattern.tag] = value
+
+        return self.result_builder(match_result), lexem_list
+
+load_pattern = SequentialPattern(
+    [OpcodePattern("ld"), RegisterPattern("dst"), AddressPattern("addr")],
+    lambda result: Instruction("load", use_list=(result["addr"].base + result["addr"].offset), def_list=result["dst"])
+)
+
+add_pattern = SequentialPattern(
+    [OpcodePattern("add"), RegisterPattern("dst"), RegisterPattern("lhs"), RegisterPattern("rhs")],
+    lambda result: Instruction("add", use_list=(result["lhs"] + result["rhs"]), def_list=result["dst"])
+)
 
 class AsmParser:
     def __init__(self, arch, program):
@@ -247,6 +434,7 @@ class AsmParser:
                     insn.dbg_object = dbg_object
                     self.ongoing_bundle.add_insn(insn)
                 else:
+                    print("unable to parse {} @ {}".format(lexem_list, dbg_object))
                     raise NotImplementedError
         else:
             raise NotImplementedError
@@ -293,81 +481,23 @@ class AsmParser:
             - the list (most likely a single element) of virtual register
               encoded in lexem
             - a list of remaining lexems """
-        virtual_register_type_lexem = lexem_list[0]
-        lexem_list = lexem_list[1:]
-        reg_type = virtual_register_type_lexem.value
-
-        if not isinstance(virtual_register_type_lexem, Lexem) or not reg_type in "RDQOABCD":
-            raise Exception("expecting virtual register type macro (RDQOABCD) got {}".format(virtual_register_type_lexem))
-
-        lexem_list = MetaPopOperatorPredicate("(")(lexem_list)
-
-        reg_name_list = []
-        while isinstance(lexem_list[0], Lexem) and lexem_list[0].value != ")":
-            reg_name_list.append(lexem_list[0].value)
-            lexem_list = lexem_list[1:]
-
-        lexem_list = MetaPopOperatorPredicate(")")(lexem_list)
-
-        simple_reg_class = {
-            "R": Register.Std,
-            "A": Register.Acc
-        }
-        if reg_type in simple_reg_class:
-            reg_class = simple_reg_class[reg_type]
-            reg_name = reg_name_list[0]
-            return [self.arch.get_unique_virt_reg_object(reg_name, reg_class=reg_class)], lexem_list
-        else:
-            multi_reg_name = reg_name_list
-            if reg_type == "D":
-                lo_reg = self.arch.get_unique_virt_reg_object(multi_reg_name[0], reg_class=Register.Std, reg_constraint=even_indexed_register)
-                hi_reg = self.arch.get_unique_virt_reg_object(multi_reg_name[1], reg_class=Register.Std, reg_constraint=odd_indexed_register)
-                lo_reg.add_linked_register(hi_reg, lambda color_map: [color_map[hi_reg] - 1])
-                hi_reg.add_linked_register(lo_reg, lambda color_map: [color_map[lo_reg] + 1])
-                return [lo_reg, hi_reg], lexem_list
-            else:
-                print("unsupported register-class {}".format(reg_type))
-                raise NotImplementedError
+        reg_list, lexem_list = VirtualRegisterPattern.parse(self.arch, lexem_list)
+        return reg_list, lexem_list
 
     def parse_register(self, lexem_list):
         """ extract the lexem register representing a list of registers
             return the list of register object and the remaining
             list of lexems """
         if isinstance(lexem_list[0], RegisterLexem):
-            #raise Exception("RegisterLexem was expected, got: {}".format(lexem))
-            reg_lexem = lexem_list[0]
-
-            STD_REG_PATTERN = "\$([r][0-9]+){1,4}"
-            ACC_REG_PATTERN = "\$([a][0-9]+){1,4}"
-
-            index_range = [int(index) for index in re.split("\D+", reg_lexem.value) if index != ""]
-
-            if re.fullmatch(STD_REG_PATTERN, reg_lexem.value):
-                register_list = [self.arch.get_unique_phys_reg_object(index, ArchRegister.Std) for index in index_range]
-            elif re.fullmatch(ACC_REG_PATTERN, reg_lexem.value):
-                register_list = [self.arch.get_unique_phys_reg_object(index, ArchRegister.Acc) for index in index_range]
-            else:
-                raise NotImplementedError
-
-            return register_list, lexem_list[1:]
+            reg_list, lexem_list = PhysicalRegisterPattern.parse(self.arch, lexem_list)
+            return reg_list, lexem_list
         else:
             # trying to parse a virtual register
             return self.parse_virtual_register(lexem_list)
 
 
     def parse_offset_from_list(self, lexem_list):
-        offset_lexem = lexem_list[0]
-        if isinstance(offset_lexem, ImmediateLexem):
-            offset = ImmediateValue(int(offset_lexem.value))
-            lexem_list = lexem_list[1:]
-        elif isinstance(offset_lexem, RegisterLexem):
-            offset, lexem_list = self.parse_register(lexem_list)
-        elif isinstance(offset_lexem, Lexem):
-            offset, lexem_list = self.parse_virtual_register(lexem_list)
-        else:
-            print("unrecognized lexem {} while parsing for offset".format(offset_lexem))
-            raise NotImplementedError
-        return offset, lexem_list
+        return OffsetPattern.parse(self.arch, lexem_list)
 
     def parse_base_addr_from_list(self, lexem_list):
 
@@ -384,6 +514,13 @@ class AsmParser:
         return (base_addr + offset), lexem_list
 
     def parse_load_from_list(self, lexem_list):
+        load_match = load_pattern.match(self.arch, lexem_list)
+        if not load_match is None:
+            load_insn, lexem_list = load_match
+            return load_insn, lexem_list
+        else:
+            print("failed to match load in {}".format(lexem_list))
+            sys.exit(1)
         insn, lexem_list = self.parse_insn_from_list(lexem_list)
         dst_reg, lexem_list = self.parse_register_from_list(lexem_list)
         addr, lexem_list = self.parse_addr_from_list(lexem_list)
@@ -391,12 +528,19 @@ class AsmParser:
         return insn_object, lexem_list
 
     def parse_add_from_list(self, lexem_list):
-        insn, lexem_list = self.parse_insn_from_list(lexem_list)
-        dst_reg, lexem_list = self.parse_register_from_list(lexem_list)
-        lhs, lexem_list = self.parse_register_from_list(lexem_list)
-        rhs, lexem_list = self.parse_register_from_list(lexem_list)
-        insn_object = Instruction("add", use_list=(lhs + rhs), def_list=dst_reg)
-        return insn_object, lexem_list
+        add_match = add_pattern.match(self.arch, lexem_list)
+        if not add_match is None:
+            add_insn, lexem_list = add_match
+            return add_insn, lexem_list
+        else:
+            print("failed to match add in {}".format(lexem_list))
+            sys.exit(1)
+        #insn, lexem_list = self.parse_insn_from_list(lexem_list)
+        #dst_reg, lexem_list = self.parse_register_from_list(lexem_list)
+        #lhs, lexem_list = self.parse_register_from_list(lexem_list)
+        #rhs, lexem_list = self.parse_register_from_list(lexem_list)
+        #insn_object = Instruction("add", use_list=(lhs + rhs), def_list=dst_reg)
+        #return insn_object, lexem_list
 
     def parse_addd_from_list(self, lexem_list):
         insn, lexem_list = self.parse_insn_from_list(lexem_list)
