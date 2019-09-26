@@ -1,3 +1,5 @@
+Build status: [![Build Status](https://travis-ci.org/nibrunie/asmde.svg?branch=master)](https://travis-ci.org/nibrunie/asmde)
+
 # Assembly Development Editor
 
 asmde is a small utility to help developp assembly programs.
