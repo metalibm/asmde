@@ -214,8 +214,6 @@ def lexem_string_match(s):
         return isinstance(lexem, Lexem) and lexem.value == s
     return operator
 
-def register_extract_match(ctx, lexem_list):
-    ctx.parse_register_from_list
 
 class Pattern:
     def __init__(self, tag):
@@ -229,16 +227,11 @@ class Pattern:
         raise NotImplementedError
 
 class VirtualRegisterPattern(Pattern):
-    VIRT_REG_DESCRIPTOR = None #"RDQOABCD"
-    VIRT_REG_CLASS = None
-    #{
-    #        "R": Register.Std,
-    #        "A": Register.Acc
-    #}
-    @classmethod
-    def get_reg_list_from_names(VRP_Class, arch, reg_name_list):
-        raise NotImplementedError
-
+    VIRT_REG_DESCRIPTOR = "RDQOABCD"
+    VIRT_REG_CLASS = {
+            "R": Register.Std,
+            "A": Register.Acc
+    }
     @classmethod
     def parse(VRP_Class, arch, lexem_list):
         """ Try to parse a virtual register description for @p lexem_list
@@ -263,37 +256,41 @@ class VirtualRegisterPattern(Pattern):
 
         lexem_list = MetaPopOperatorPredicate(")")(lexem_list)
 
-        simple_reg_class = {
-            "R": Register.Std,
-            "A": Register.Acc
-        }
-        reg_list = VRP_Class.get_reg_list_from_names(arch, reg_name_list)
+        reg_list = VRP_Class.get_reg_list_from_names(arch, reg_name_list, reg_type)
         return reg_list, lexem_list
-        #if reg_type in VRP_Class.VIRT_REG_CLASS:
-        #    reg_class = VRP_Class.VIRT_REG_CLASS[reg_type]
-        #    reg_name = reg_name_list[0]
-        #    return [arch.get_unique_virt_reg_object(reg_name, reg_class=reg_class)], lexem_list
-        #else:
-        #    multi_reg_name = reg_name_list
-        #    if reg_type == "D":
-        #        lo_reg = arch.get_unique_virt_reg_object(multi_reg_name[0], reg_class=Register.Std, reg_constraint=even_indexed_register)
-        #        hi_reg = arch.get_unique_virt_reg_object(multi_reg_name[1], reg_class=Register.Std, reg_constraint=odd_indexed_register)
-        #        lo_reg.add_linked_register(hi_reg, lambda color_map: [color_map[hi_reg] - 1])
-        #        hi_reg.add_linked_register(lo_reg, lambda color_map: [color_map[lo_reg] + 1])
-        #        return [lo_reg, hi_reg], lexem_list
-        #    else:
-        #        print("unsupported register-class {}".format(reg_type))
-        #        raise NotImplementedError
-        #return None
+
+    @classmethod
+    def get_reg_list_from_names(VRP_Class, arch, reg_name_list, reg_type):
+        raise NotImplementedError
+
+class VirtualRegisterPattern_Any(VirtualRegisterPattern):
+    @classmethod
+    def get_reg_list_from_names(VRP_Class, arch, reg_name_list, reg_type):
+        REG_CLASS_PATTERN_MAP = {
+            "R": VirtualRegisterPattern_Std,
+            "A": VirtualRegisterPattern_Acc,
+            "D": VirtualRegisterPattern_DualStd,
+        }
+        if not reg_type in REG_CLASS_PATTERN_MAP:
+            print("reg_type {} not found in REG_CLASS_PATTERN_MAP (name list: {})".format(reg_typ, reg_name_list))
+            sys.exit(1)
+        RegPatternClass = REG_CLASS_PATTERN_MAP[reg_type]
+        reg_list = RegPatternClass.get_reg_list_from_names(arch, reg_name_list, reg_type)
+        return reg_list
+
 
 class VirtualRegisterPattern_SingleReg(VirtualRegisterPattern):
-    def get_reg_list_from_names(VRP_Class, arch, reg_name_list):
+    @classmethod
+    def get_reg_list_from_names(VRP_Class, arch, reg_name_list, reg_type):
+        assert reg_type in "RA"
         return [arch.get_unique_virt_reg_object(reg_name_list[0], reg_class=VRP_Class.VIRT_REG_CLASS)]
 
 class VirtualRegisterPattern_DualReg(VirtualRegisterPattern):
-    def get_reg_list_from_names(VRP_Class, arch, reg_name_list):
-        lo_reg = arch.get_unique_virt_reg_object(multi_reg_name[0], reg_class=VRP_Class.VIRT_REG_CLASS, reg_constraint=even_indexed_register)
-        hi_reg = arch.get_unique_virt_reg_object(multi_reg_name[1], reg_class=VRP_Class.VIRT_REG_CLASS, reg_constraint=odd_indexed_register)
+    @classmethod
+    def get_reg_list_from_names(VRP_Class, arch, reg_name_list, reg_type):
+        assert reg_type in VRP_Class.VIRT_REG_DESCRIPTOR
+        lo_reg = arch.get_unique_virt_reg_object(reg_name_list[0], reg_class=VRP_Class.VIRT_REG_CLASS, reg_constraint=even_indexed_register)
+        hi_reg = arch.get_unique_virt_reg_object(reg_name_list[1], reg_class=VRP_Class.VIRT_REG_CLASS, reg_constraint=odd_indexed_register)
         lo_reg.add_linked_register(hi_reg, lambda color_map: [color_map[hi_reg] - 1])
         hi_reg.add_linked_register(lo_reg, lambda color_map: [color_map[lo_reg] + 1])
         return [lo_reg, hi_reg]
@@ -304,10 +301,17 @@ class VirtualRegisterPattern_Acc(VirtualRegisterPattern_SingleReg):
 class VirtualRegisterPattern_Std(VirtualRegisterPattern_SingleReg):
     VIRT_REG_CLASS = Register.Std
     VIRT_REG_DESCRIPTOR = "R"
+class VirtualRegisterPattern_DualStd(VirtualRegisterPattern_DualReg):
+    VIRT_REG_CLASS = Register.Std
+    VIRT_REG_DESCRIPTOR = "D"
 
 class PhysicalRegisterPattern(Pattern):
     """ pattern for physical register """
     REG_PATTERN = None
+
+    @staticmethod
+    def get_unique_reg_obj(arch, index):
+        raise NotImplementedError
 
     @classmethod
     def parse(PRP_Class, arch, lexem_list):
@@ -321,7 +325,7 @@ class PhysicalRegisterPattern(Pattern):
             index_range = [int(index) for index in re.split("\D+", reg_lexem.value) if index != ""]
 
             if re.fullmatch(PRP_Class.REG_PATTERN, reg_lexem.value):
-                register_list = [PRP_Class.get_unique_phys_reg_object(arch, index) for index in index_range]
+                register_list = [PRP_Class.get_unique_reg_obj(arch, index) for index in index_range]
             #if re.fullmatch(STD_REG_PATTERN, reg_lexem.value):
             #    register_list = [arch.get_unique_phys_reg_object(index, ArchRegister.Std) for index in index_range]
             #elif re.fullmatch(ACC_REG_PATTERN, reg_lexem.value):
@@ -334,6 +338,37 @@ class PhysicalRegisterPattern(Pattern):
             # trying to parse a virtual register
             return None
 
+
+class PhysicalRegisterPattern_Any(Pattern):
+    """ pattern for physical register """
+    REG_PATTERN = None
+
+    @classmethod
+    def parse(PRP_Class, arch, lexem_list):
+        if isinstance(lexem_list[0], RegisterLexem):
+            #raise Exception("RegisterLexem was expected, got: {}".format(lexem))
+            reg_lexem = lexem_list[0]
+
+            PATTERN_MAP = {
+                "\$([r][0-9]+){1,4}": Register.Std,
+                "\$([a][0-9]+){1,4}": Register.Acc,
+            }
+
+            index_range = [int(index) for index in re.split("\D+", reg_lexem.value) if index != ""]
+
+            register_list = None
+
+            for pattern in PATTERN_MAP:
+                if re.fullmatch(pattern, reg_lexem.value):
+                    register_list = [arch.get_unique_phys_reg_object(index, PATTERN_MAP[pattern]) for index in index_range]
+                    break
+            if register_list is None:
+                return None
+
+            return register_list, lexem_list[1:]
+        else:
+            # trying to parse a virtual register
+            return None
 
 class PhysicalRegisterPattern_Std(PhysicalRegisterPattern):
     REG_PATTERN = "\$([r][0-9]+){1,4}"
@@ -357,7 +392,7 @@ class RegisterPattern(Pattern):
     PHYSICAL_PATTERN_CLASS = None
 
     @classmethod
-    def parse(RP_CLass, arch, lexem_list):
+    def parse(RP_Class, arch, lexem_list):
         virtual_match = RP_Class.VIRTUAL_PATTERN_CLASS.parse(arch, lexem_list)
         if not virtual_match is None:
             # pair (register_list, remaining lexem list)
@@ -459,8 +494,8 @@ INSN_PATTERN_MATCH = {
         lambda result: Instruction("add", use_list=(result["lhs"] + result["rhs"]), def_list=result["dst"])
     ),
     "movefo":  SequentialPattern(
-        [OpcodePattern("movefo"), RegisterPattern_Acc("dst"), RegisterPattern_Std("src")],
-        lambda result: Instruction("movefo", use_list=(result["src"]), def_list=result["dst"])
+        [OpcodePattern("movefo"), RegisterPattern_Acc("dst"), RegisterPattern_Std("lhs"), RegisterPattern_Std("rhs")],
+        lambda result: Instruction("movefo", use_list=(result["lhs"] + result["rhs"]), def_list=result["dst"])
     ),
     "movefa":  SequentialPattern(
         [OpcodePattern("movefa"), RegisterPattern_Std("dst"), RegisterPattern_Acc("src")],
@@ -563,7 +598,7 @@ class AsmParser:
             - the list (most likely a single element) of virtual register
               encoded in lexem
             - a list of remaining lexems """
-        reg_list, lexem_list = VirtualRegisterPattern.parse(self.arch, lexem_list)
+        reg_list, lexem_list = VirtualRegisterPattern_Any.parse(self.arch, lexem_list)
         return reg_list, lexem_list
 
     def parse_register(self, lexem_list):
@@ -571,7 +606,11 @@ class AsmParser:
             return the list of register object and the remaining
             list of lexems """
         if isinstance(lexem_list[0], RegisterLexem):
-            reg_list, lexem_list = PhysicalRegisterPattern.parse(self.arch, lexem_list)
+            register_match = PhysicalRegisterPattern_Any.parse(self.arch, lexem_list)
+            if register_match is None:
+                print("unable to parse register from {}".format(lexem_list))
+                sys.exit(1)
+            reg_list, lexem_list = register_match
             return reg_list, lexem_list
         else:
             # trying to parse a virtual register
