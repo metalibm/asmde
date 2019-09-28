@@ -122,6 +122,12 @@ class ImmediateValue:
     def __init__(self, value):
         self.value = value
 
+    def instanciate(self, color_map):
+        return self
+
+    def __repr__(self):
+        return "%d" % self.value
+
 class DebugObject:
     """ Structure to store and forwared debug information """
     def __init__(self, src_line, src_file=None):
@@ -243,11 +249,6 @@ def MetaPopOperatorPredicate(op_value):
             return False
         return lexem_list[1:]
     return predicate
-
-def lexem_string_match(s):
-    def operator(lexem):
-        return isinstance(lexem, Lexem) and lexem.value == s
-    return operator
 
 
 class Pattern:
@@ -468,7 +469,7 @@ class OffsetPattern_Std(Pattern):
     def parse(arch, lexem_list):
         offset_lexem = lexem_list[0]
         if isinstance(offset_lexem, ImmediateLexem):
-            offset = ImmediateValue(int(offset_lexem.value))
+            offset = [ImmediateValue(int(offset_lexem.value))]
             lexem_list = lexem_list[1:]
         elif isinstance(offset_lexem, RegisterLexem):
             offset, lexem_list = PhysicalRegisterPattern_Std.parse(arch, lexem_list)
@@ -884,6 +885,9 @@ class RegisterAssignator:
         for index, bundle in enumerate(program.bundle_list):
             for insn in bundle.insn_list:
                 for reg in insn.use_list:
+                    if not isinstance(reg, Register):
+                        # discard non register element (e.g. ImmediateValue)
+                        continue
                     if not reg in liverange_map:
                         liverange_map[reg] = [LiveRange()]
                     # we update the last inserted LiveRange object in reg's list
