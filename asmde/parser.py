@@ -42,11 +42,6 @@ class Register:
         """ predicate indicating if register is virtual (or physical) """
         raise NotImplementedError
 
-class SubRegister:
-    """ Elementary register object """
-    def __init__(self, index, reg_class):
-        self.index = index
-        self.reg_class
 
 class MultiArchRegister:
     """ register formed by concatening multiple regsiters """
