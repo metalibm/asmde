@@ -599,13 +599,6 @@ class AsmParser:
                 self.program.add_label(head.value)
 
             else:
-                INSN_PARSING_MAP = {
-                    #"ld": self.parse_load_from_list,
-                    #"add": self.parse_add_from_list,
-                    "addd": self.parse_addd_from_list,
-                    #"movefa": self.parse_mofeva_from_list,
-                    #"movefo": self.parse_mofevo_from_list,
-                }
                 if head.value in INSN_PATTERN_MATCH:
                     insn_pattern = INSN_PATTERN_MATCH[head.value]
                     insn_match = insn_pattern.match(self.arch, lexem_list)
@@ -615,9 +608,6 @@ class AsmParser:
                     else:
                         insn_object, lexem_list = insn_match
 
-                elif head.value in INSN_PARSING_MAP:
-                    parsing_method = INSN_PARSING_MAP[head.value]
-                    insn_object, lexem_list = parsing_method(lexem_list)
                 else:
                     print("unable to parse {} @ {}".format(lexem_list, dbg_object))
                     raise NotImplementedError
@@ -688,75 +678,6 @@ class AsmParser:
             # trying to parse a virtual register
             return self.parse_virtual_register(lexem_list)
 
-
-    def parse_offset_from_list(self, lexem_list):
-        return OffsetPattern.parse(self.arch, lexem_list)
-
-    def parse_base_addr_from_list(self, lexem_list):
-
-        lexem_list = MetaPopOperatorPredicate("[")(lexem_list)
-        base_addr, lexem_list = self.parse_register_from_list(lexem_list)
-        lexem_list = MetaPopOperatorPredicate("]")(lexem_list)
-
-        return base_addr, lexem_list
-
-    def parse_addr_from_list(self, lexem_list):
-        offset, lexem_list = self.parse_offset_from_list(lexem_list)
-        base_addr, lexem_list = self.parse_base_addr_from_list(lexem_list)
-
-        return (base_addr + offset), lexem_list
-
-    def parse_load_from_list(self, lexem_list):
-        load_match = load_pattern.match(self.arch, lexem_list)
-        if not load_match is None:
-            load_insn, lexem_list = load_match
-            return load_insn, lexem_list
-        else:
-            print("failed to match load in {}".format(lexem_list))
-            sys.exit(1)
-        insn, lexem_list = self.parse_insn_from_list(lexem_list)
-        dst_reg, lexem_list = self.parse_register_from_list(lexem_list)
-        addr, lexem_list = self.parse_addr_from_list(lexem_list)
-        insn_object = Instruction("load", use_list=addr, def_list=dst_reg)
-        return insn_object, lexem_list
-
-    def parse_add_from_list(self, lexem_list):
-        add_match = add_pattern.match(self.arch, lexem_list)
-        if not add_match is None:
-            add_insn, lexem_list = add_match
-            return add_insn, lexem_list
-        else:
-            print("failed to match add in {}".format(lexem_list))
-            sys.exit(1)
-        #insn, lexem_list = self.parse_insn_from_list(lexem_list)
-        #dst_reg, lexem_list = self.parse_register_from_list(lexem_list)
-        #lhs, lexem_list = self.parse_register_from_list(lexem_list)
-        #rhs, lexem_list = self.parse_register_from_list(lexem_list)
-        #insn_object = Instruction("add", use_list=(lhs + rhs), def_list=dst_reg)
-        #return insn_object, lexem_list
-
-    def parse_addd_from_list(self, lexem_list):
-        insn, lexem_list = self.parse_insn_from_list(lexem_list)
-        dst_reg, lexem_list = self.parse_register_from_list(lexem_list)
-        lhs, lexem_list = self.parse_register_from_list(lexem_list)
-        rhs, lexem_list = self.parse_register_from_list(lexem_list)
-        insn_object = Instruction("addd", use_list=(lhs + rhs), def_list=dst_reg)
-        return insn_object, lexem_list
-
-    def parse_mofevo_from_list(self, lexem_list):
-        insn, lexem_list = self.parse_insn_from_list(lexem_list)
-        dst_reg, lexem_list = self.parse_register_from_list(lexem_list)
-        lhs, lexem_list = self.parse_register_from_list(lexem_list)
-        rhs, lexem_list = self.parse_register_from_list(lexem_list)
-        insn_object = Instruction("movefo", use_list=(lhs + rhs), def_list=dst_reg)
-        return insn_object, lexem_list
-
-    def parse_mofeva_from_list(self, lexem_list):
-        insn, lexem_list = self.parse_insn_from_list(lexem_list)
-        dst_reg, lexem_list = self.parse_register_from_list(lexem_list)
-        lhs, lexem_list = self.parse_register_from_list(lexem_list)
-        insn_object = Instruction("movefa", use_list=(lhs), def_list=dst_reg)
-        return insn_object, lexem_list
 
 class LiveRange:
     def __init__(self, start=None, stop=None, start_dbg_object=None, stop_dbg_object=None):
