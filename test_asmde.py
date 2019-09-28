@@ -8,6 +8,7 @@ def test_basic():
         "examples/test_basic_2.S",
         "examples/test_dual_split_regs.S",
         "examples/test_immediate.S",
+        "examples/test_extended.S",
     ]
     # testing all available examples
     for test in test_list:
