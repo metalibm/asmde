@@ -9,5 +9,4 @@ python:
 install:
 # command to run tests
 script:
-  - python asmde/parser.py --input examples/test_basic.S
-  - python asmde/parser.py --input examples/test_basic_2.S
+  - pytest
