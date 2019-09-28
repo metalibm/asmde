@@ -16,8 +16,21 @@ from lexer import (
 class Register:
     class Std:
         name = "Std"
+        prefix = "$"
+        reg_prefix = "r"
+        #@staticmethod
+        #def instanciate_multi_reg(reg_list):
+        #    return "${}".format("".join("r%d" % reg.index for reg in reg_list))
+        @staticmethod
+        def build_multi_reg(reg_list):
+            return MultiArchRegister(reg_list, Register.Std) 
     class Acc:
         name = "Acc"
+        prefix = "$"
+        reg_prefix = "a"
+        @staticmethod
+        def build_multi_reg(reg_list):
+            return MultiArchRegister(reg_list, Register.Acc) 
 
     def is_virtual(self):
         """ predicate indicating if register is virtual (or physical) """
@@ -28,6 +41,19 @@ class SubRegister:
     def __init__(self, index, reg_class):
         self.index = index
         self.reg_class
+
+class MultiArchRegister:
+    """ register formed by concatening multiple regsiters """
+    def __init__(self, reg_list, reg_class):
+        self.reg_list = reg_list
+        self.reg_class = reg_class
+
+    def __repr__(self):
+        return "{prefix}{reg_list}".format(
+            prefix=self.reg_class.prefix,
+            reg_list="".join("%s%d" % (self.reg_class.reg_prefix, reg.index) for reg in self.reg_list)
+        )
+
 
 class ArchRegister(Register):
     def __init__(self, index, reg_class=None):
@@ -44,6 +70,9 @@ class ArchRegister(Register):
 
     def is_virtual(self):
         return False
+
+    def instanciate(self, color_map):
+        return self
 
 # linked register
 # register that must be assigned while enforcing a common constraint
@@ -85,6 +114,8 @@ class VirtualRegister(Register):
             return "$a<{}>".format(self.name)
         return "VirtualRegister(name={}, class={})".format(self.name, self.reg_class)
 
+    def instanciate(self, color_map):
+        return ArchRegister(color_map[self.reg_class][self], self.reg_class)
 
 
 class ImmediateValue:
@@ -100,11 +131,13 @@ class DebugObject:
         return "Dbg(lineno={})".format(self.src_line)
 
 class Instruction:
-    def __init__(self, insn_object, def_list=None, use_list=None, dbg_object=None):
+    def __init__(self, insn_object, def_list=None, use_list=None, dbg_object=None, dump_pattern=None):
         self.insn_object = insn_object
         self.def_list = [] if def_list is None else def_list
         self.use_list = [] if use_list is None else use_list
         self.dbg_object = dbg_object
+        # function (use_list, def_list) -> instruction string
+        self.dump_pattern = dump_pattern
 
     def __repr__(self):
         return self.insn_object
@@ -151,6 +184,7 @@ class RegFile:
         return self.description.num_phys_reg - 1
 
 class Architecture:
+    """ Base class for architecture description """
     def __init__(self, reg_file_description_set):
         self.reg_pool = dict((reg_desc.reg_class, RegFile(reg_desc)) for reg_desc in reg_file_description_set)
 
@@ -239,6 +273,8 @@ class VirtualRegisterPattern(Pattern):
             - the list (most likely a single element) of virtual register
               encoded in lexem
             - a list of remaining lexems """
+        if len(lexem_list) == 0:
+            return None
         virtual_register_type_lexem = lexem_list[0]
         lexem_list = lexem_list[1:]
         reg_type = virtual_register_type_lexem.value
@@ -315,7 +351,9 @@ class PhysicalRegisterPattern(Pattern):
 
     @classmethod
     def parse(PRP_Class, arch, lexem_list):
-        if isinstance(lexem_list[0], RegisterLexem):
+        if not len(lexem_list):
+            return None
+        elif isinstance(lexem_list[0], RegisterLexem):
             #raise Exception("RegisterLexem was expected, got: {}".format(lexem))
             reg_lexem = lexem_list[0]
 
@@ -371,12 +409,18 @@ class PhysicalRegisterPattern_Any(Pattern):
             return None
 
 class PhysicalRegisterPattern_Std(PhysicalRegisterPattern):
-    REG_PATTERN = "\$([r][0-9]+){1,4}"
+    REG_PATTERN = "\$([r][0-9]+)"#{1,4}"
 
     @staticmethod
     def get_unique_reg_obj(arch, index):
         return arch.get_unique_phys_reg_object(index, ArchRegister.Std)
 
+class PhysicalRegisterPattern_DualStd(PhysicalRegisterPattern):
+    REG_PATTERN = "\$([r][0-9]+){2}"
+
+    @staticmethod
+    def get_unique_reg_obj(arch, index):
+        return arch.get_unique_phys_reg_object(index, ArchRegister.Std)
 
 class PhysicalRegisterPattern_Acc(PhysicalRegisterPattern):
     REG_PATTERN = "\$([a][0-9]+){1,4}"
@@ -407,6 +451,11 @@ class RegisterPattern(Pattern):
 class RegisterPattern_Std(RegisterPattern):
     VIRTUAL_PATTERN_CLASS = VirtualRegisterPattern_Std
     PHYSICAL_PATTERN_CLASS = PhysicalRegisterPattern_Std
+
+class RegisterPattern_DualStd(RegisterPattern):
+    VIRTUAL_PATTERN_CLASS = VirtualRegisterPattern_DualStd
+    PHYSICAL_PATTERN_CLASS = PhysicalRegisterPattern_DualStd
+
 class RegisterPattern_Acc(RegisterPattern):
     VIRTUAL_PATTERN_CLASS = VirtualRegisterPattern_Acc
     PHYSICAL_PATTERN_CLASS = PhysicalRegisterPattern_Acc
@@ -483,23 +532,44 @@ class SequentialPattern:
         return self.result_builder(match_result), lexem_list
 
 
+def instanciate_dual_reg(color_map, reg_class, reg_list):
+    """ Instanciate a pair of registers formed by the registers in reg_list """
+    instanciated_list = [reg.instanciate(color_map) for reg in reg_list]
+    return reg_class.build_multi_reg(instanciated_list)
+    
+
 
 INSN_PATTERN_MATCH = {
     "ld":   SequentialPattern(
         [OpcodePattern("ld"), RegisterPattern_Std("dst"), AddressPattern_Std("addr")],
-        lambda result: Instruction("load", use_list=(result["addr"].base + result["addr"].offset), def_list=result["dst"])
+        lambda result: 
+            Instruction("ld", 
+                        use_list=(result["addr"].base + result["addr"].offset), 
+                        def_list=result["dst"],
+                        dump_pattern=lambda color_map, use_list, def_list: "ld {} = {}[{}]".format(def_list[0].instanciate(color_map), use_list[1].instanciate(color_map), use_list[0].instanciate(color_map)))
     ),
     "add":  SequentialPattern(
         [OpcodePattern("add"), RegisterPattern_Std("dst"), RegisterPattern_Std("lhs"), RegisterPattern_Std("rhs")],
-        lambda result: Instruction("add", use_list=(result["lhs"] + result["rhs"]), def_list=result["dst"])
+        lambda result:
+            Instruction("add", 
+                        use_list=(result["lhs"] + result["rhs"]), 
+                        def_list=result["dst"],
+                        dump_pattern=lambda color_map, use_list, def_list: "add {} = {}, {}".format(def_list[0].instanciate(color_map), use_list[0].instanciate(color_map), use_list[1].instanciate(color_map)))
+    ),
+    "addd":  SequentialPattern(
+        [OpcodePattern("addd"), RegisterPattern_DualStd("dst"), RegisterPattern_Std("lhs"), RegisterPattern_Std("rhs")],
+        lambda result: Instruction("addd", use_list=(result["lhs"] + result["rhs"]), def_list=result["dst"], 
+                                   dump_pattern=lambda color_map, use_list, def_list: "addd {} = {}, {}".format(instanciate_dual_reg(color_map, Register.Std, def_list[0:2]), use_list[0].instanciate(color_map), use_list[1].instanciate(color_map)))
     ),
     "movefo":  SequentialPattern(
         [OpcodePattern("movefo"), RegisterPattern_Acc("dst"), RegisterPattern_Std("lhs"), RegisterPattern_Std("rhs")],
-        lambda result: Instruction("movefo", use_list=(result["lhs"] + result["rhs"]), def_list=result["dst"])
+        lambda result: Instruction("movefo", use_list=(result["lhs"] + result["rhs"]), def_list=result["dst"],
+                                   dump_pattern=lambda color_map, use_list, def_list: "movefo {} = {}, {}".format(def_list[0].instanciate(color_map), use_list[0].instanciate(color_map), use_list[1].instanciate(color_map)))
     ),
     "movefa":  SequentialPattern(
         [OpcodePattern("movefa"), RegisterPattern_Std("dst"), RegisterPattern_Acc("src")],
-        lambda result: Instruction("movefo", use_list=(result["src"]), def_list=result["dst"])
+        lambda result: Instruction("movefo", use_list=(result["src"]), def_list=result["dst"],
+                                   dump_pattern=lambda color_map, use_list, def_list: "movefa {} = {}".format(def_list[0].instanciate(color_map), use_list[0].instanciate(color_map)))
     ),
 }
 
@@ -1023,9 +1093,24 @@ if __name__ == "__main__":
                 if reg.is_virtual():
                     output_callback("#define {} {}\n".format(reg.name, color_map[reg_class][reg]))
 
+    def dump_program(program, color_map):
+        for bundle in program:
+            for insn in bundle.insn_list:
+                if not insn.dump_pattern is None:
+                    # use_list = [reg.instanciate(color_map) for reg in insn.use_list]
+                    # def_list = [reg.instanciate(color_map) for reg in insn.def_list]
+
+                    print(insn.dump_pattern(color_map, insn.use_list, insn.def_list))
+
+            print(";;")
+            
+
     if args.output is None:
         dump_allocation(color_map, lambda s: print(s, end=""))
     else:
         with open(args.output, "w") as output_stream:
             dump_allocation(color_map, lambda s: output_stream.write(s))
+
+    print("dumping program")
+    dump_program(asm_parser.program.bundle_list, color_map)
 
