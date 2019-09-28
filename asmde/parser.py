@@ -61,7 +61,7 @@ class MultiArchRegister:
         )
 
 
-class ArchRegister(Register):
+class PhysicalRegister(Register):
     """ Physical register """
     def __init__(self, index, reg_class=None):
         self.index = index
@@ -114,7 +114,7 @@ class VirtualRegister(Register):
         return self.reg_class.get_single_virt_reg_repr(self)
 
     def instanciate(self, color_map):
-        return ArchRegister(color_map[self.reg_class][self], self.reg_class)
+        return PhysicalRegister(color_map[self.reg_class][self], self.reg_class)
 
 
 class ImmediateValue:
@@ -192,8 +192,10 @@ class RegFile:
 
 class Architecture:
     """ Base class for architecture description """
-    def __init__(self, reg_file_description_set):
+    def __init__(self, reg_file_description_set, insn_patterns):
         self.reg_pool = dict((reg_desc.reg_class, RegFile(reg_desc)) for reg_desc in reg_file_description_set)
+        # table (insn pattern) -> Pattern 
+        self.insn_patterns = insn_patterns
 
     def get_max_register_index_by_class(self, reg_class):
         return self.reg_pool[reg_class].get_max_phys_register_index()
@@ -206,6 +208,16 @@ class Architecture:
 
     def get_empty_liverange_map(self):
         return LiveRangeMap(self.reg_pool.keys())
+
+class DummyArchitecture(Architecture):
+    def __init__(self, std_reg_num=16, acc_reg_num=16):
+        Architecture.__init__(self,
+            set([
+                RegFileDescription(Register.Std, std_reg_num, PhysicalRegister, VirtualRegister),
+                RegFileDescription(Register.Acc, acc_reg_num, PhysicalRegister, VirtualRegister)
+            ]),
+            INSN_PATTERN_MATCH
+        )
 
 class Program:
     def __init__(self, pre_defined_list=None, post_used_list=None):
@@ -367,9 +379,9 @@ class PhysicalRegisterPattern(Pattern):
             if re.fullmatch(PRP_Class.REG_PATTERN, reg_lexem.value):
                 register_list = [PRP_Class.get_unique_reg_obj(arch, index) for index in index_range]
             #if re.fullmatch(STD_REG_PATTERN, reg_lexem.value):
-            #    register_list = [arch.get_unique_phys_reg_object(index, ArchRegister.Std) for index in index_range]
+            #    register_list = [arch.get_unique_phys_reg_object(index, PhysicalRegister.Std) for index in index_range]
             #elif re.fullmatch(ACC_REG_PATTERN, reg_lexem.value):
-            #    register_list = [arch.get_unique_phys_reg_object(index, ArchRegister.Acc) for index in index_range]
+            #    register_list = [arch.get_unique_phys_reg_object(index, PhysicalRegister.Acc) for index in index_range]
             else:
                 raise NotImplementedError
 
@@ -415,21 +427,21 @@ class PhysicalRegisterPattern_Std(PhysicalRegisterPattern):
 
     @staticmethod
     def get_unique_reg_obj(arch, index):
-        return arch.get_unique_phys_reg_object(index, ArchRegister.Std)
+        return arch.get_unique_phys_reg_object(index, PhysicalRegister.Std)
 
 class PhysicalRegisterPattern_DualStd(PhysicalRegisterPattern):
     REG_PATTERN = "\$([r][0-9]+){2}"
 
     @staticmethod
     def get_unique_reg_obj(arch, index):
-        return arch.get_unique_phys_reg_object(index, ArchRegister.Std)
+        return arch.get_unique_phys_reg_object(index, PhysicalRegister.Std)
 
 class PhysicalRegisterPattern_Acc(PhysicalRegisterPattern):
     REG_PATTERN = "\$([a][0-9]+){1,4}"
 
     @staticmethod
     def get_unique_reg_obj(arch, index):
-        return arch.get_unique_phys_reg_object(index, ArchRegister.Acc)
+        return arch.get_unique_phys_reg_object(index, PhysicalRegister.Acc)
 
 
 class RegisterPattern(Pattern):
@@ -538,23 +550,22 @@ def instanciate_dual_reg(color_map, reg_class, reg_list):
     """ Instanciate a pair of registers formed by the registers in reg_list """
     instanciated_list = [reg.instanciate(color_map) for reg in reg_list]
     return reg_class.build_multi_reg(instanciated_list)
-    
 
 
 INSN_PATTERN_MATCH = {
     "ld":   SequentialPattern(
         [OpcodePattern("ld"), RegisterPattern_Std("dst"), AddressPattern_Std("addr")],
-        lambda result: 
-            Instruction("ld", 
-                        use_list=(result["addr"].base + result["addr"].offset), 
+        lambda result:
+            Instruction("ld",
+                        use_list=(result["addr"].base + result["addr"].offset),
                         def_list=result["dst"],
                         dump_pattern=lambda color_map, use_list, def_list: "ld {} = {}[{}]".format(def_list[0].instanciate(color_map), use_list[1].instanciate(color_map), use_list[0].instanciate(color_map)))
     ),
     "add":  SequentialPattern(
         [OpcodePattern("add"), RegisterPattern_Std("dst"), RegisterPattern_Std("lhs"), RegisterPattern_Std("rhs")],
         lambda result:
-            Instruction("add", 
-                        use_list=(result["lhs"] + result["rhs"]), 
+            Instruction("add",
+                        use_list=(result["lhs"] + result["rhs"]),
                         def_list=result["dst"],
                         dump_pattern=lambda color_map, use_list, def_list: "add {} = {}, {}".format(def_list[0].instanciate(color_map), use_list[0].instanciate(color_map), use_list[1].instanciate(color_map)))
     ),
@@ -599,8 +610,8 @@ class AsmParser:
                 self.program.add_label(head.value)
 
             else:
-                if head.value in INSN_PATTERN_MATCH:
-                    insn_pattern = INSN_PATTERN_MATCH[head.value]
+                if head.value in self.arch.insn_patterns:
+                    insn_pattern = self.arch.insn_patterns[head.value]
                     insn_match = insn_pattern.match(self.arch, lexem_list)
                     if insn_match is None:
                         print("failed to match {} in {}".format(head.value, lexem_list))
@@ -752,6 +763,7 @@ class PostProgram:
         return "PostProgram"
 
 class LiveRangeMap(object):
+    """ Structure to store and manipulate register live ranges """
     def __init__(self, reg_class_list):
         self.liverange_map = dict((reg_class, {}) for reg_class in reg_class_list)
 
@@ -866,7 +878,7 @@ class RegisterAssignator:
             color_map = {}
             general_color_map[reg_class] = color_map
             for reg in graph:
-                if isinstance(reg, ArchRegister):
+                if isinstance(reg, PhysicalRegister):
                     color_map[reg] = reg.index
 
             while len(color_map) != len(graph):
@@ -886,7 +898,7 @@ class RegisterAssignator:
                         remaining_reg_list = reg_list[1:]
                         unavailable_color_set = set([color_map[neighbour] for neighbour in graph[head_reg] if neighbour in color_map])
 
-                        valid_color_set = [color for color in range(arch.reg_pool[reg_class].description.num_phys_reg) if head_reg.constraint(color)]
+                        valid_color_set = [color for color in range(self.arch.reg_pool[reg_class].description.num_phys_reg) if head_reg.constraint(color)]
                         if not len(valid_color_set):
                             # no color available in valid set
                             return None
@@ -948,6 +960,13 @@ class RegisterAssignator:
         return True
 
 
+def parse_architecture(arch_str_desc):
+    ARCH_CTOR_MAP = {
+        "dummy": DummyArchitecture
+    }
+
+    return ARCH_CTOR_MAP[arch_str_desc]()
+
 
 if __name__ == "__main__":
     # command line options
@@ -956,16 +975,12 @@ if __name__ == "__main__":
 
     parser.add_argument("--output", action="store", default=None, help="select output file (default stdout)")
     parser.add_argument("--input", action="store", help="select input file")
+    parser.add_argument("--arch", action="store", default=DummyArchitecture(), type=parse_architecture, help="select target architecture")
+
     args = parser.parse_args()
 
-    arch = Architecture(
-        set([
-            RegFileDescription(Register.Std, 16, ArchRegister, VirtualRegister),
-            RegFileDescription(Register.Acc, 4, ArchRegister, VirtualRegister)
-        ])
-    )
     program = Program()
-    asm_parser = AsmParser(arch, program)
+    asm_parser = AsmParser(args.arch, program)
 
     print("parsing input program")
     with open(args.input, "r") as input_stream:
@@ -982,9 +997,9 @@ if __name__ == "__main__":
     # manage file I/O exception
 
     print("Register Assignation")
-    reg_assignator = RegisterAssignator(arch)
+    reg_assignator = RegisterAssignator(args.arch)
 
-    empty_liverange_map = arch.get_empty_liverange_map()
+    empty_liverange_map = args.arch.get_empty_liverange_map()
 
     print("Declaring pre-defined registers")
     empty_liverange_map.populate_pre_defined_list(program)
@@ -1029,7 +1044,7 @@ if __name__ == "__main__":
                     print(insn.dump_pattern(color_map, insn.use_list, insn.def_list))
 
             print(";;")
-            
+
 
     if args.output is None:
         dump_allocation(color_map, lambda s: print(s, end=""))
