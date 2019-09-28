@@ -14,23 +14,29 @@ from lexer import (
 )
 
 class Register:
-    class Std:
+    """ main class for Register objects """
+    class RegClass:
+        """ class of registers """
+        @classmethod
+        def build_multi_reg(reg_class, reg_list):
+            """ build a multi-reg register from a list of physical registers """
+            return MultiArchRegister(reg_list, reg_class)
+        @classmethod
+        def get_single_phy_reg_repr(reg_class, phys_reg):
+            """ build a string representation for a single physical register """
+            return reg_class.prefix + reg_class.reg_prefix + str(phys_reg.index)
+        @classmethod
+        def get_single_virt_reg_repr(reg_class, virt_reg):
+            """ build a string representation for a single virtual register """
+            return reg_class.prefix + reg_class.reg_prefix + "<%s>".format(virt_reg.name)
+    class Std(RegClass):
         name = "Std"
         prefix = "$"
         reg_prefix = "r"
-        #@staticmethod
-        #def instanciate_multi_reg(reg_list):
-        #    return "${}".format("".join("r%d" % reg.index for reg in reg_list))
-        @staticmethod
-        def build_multi_reg(reg_list):
-            return MultiArchRegister(reg_list, Register.Std) 
-    class Acc:
+    class Acc(RegClass):
         name = "Acc"
         prefix = "$"
         reg_prefix = "a"
-        @staticmethod
-        def build_multi_reg(reg_list):
-            return MultiArchRegister(reg_list, Register.Acc) 
 
     def is_virtual(self):
         """ predicate indicating if register is virtual (or physical) """
@@ -56,17 +62,13 @@ class MultiArchRegister:
 
 
 class ArchRegister(Register):
+    """ Physical register """
     def __init__(self, index, reg_class=None):
         self.index = index
         self.reg_class = reg_class
 
-
     def __repr__(self):
-        if self.reg_class is Register.Std:
-            return "$r{}".format(self.index)
-        elif self.reg_class is Register.Acc:
-            return "$a{}".format(self.index)
-        return "ArchRegister(index={}, class={})".format(self.index, self.reg_class)
+        return self.reg_class.get_single_phy_reg_repr(self)
 
     def is_virtual(self):
         return False
@@ -87,6 +89,7 @@ def even_indexed_register(index):
     return (index % 2) == 0
 
 class VirtualRegister(Register):
+    """ Virtual register """
     def __init__(self, name, reg_class=None, constraint=no_constraint, linked_registers=None):
         self.name = name
         self.reg_class = reg_class
@@ -108,21 +111,19 @@ class VirtualRegister(Register):
         return True
 
     def __repr__(self):
-        if self.reg_class is Register.Std:
-            return "$r<{}>".format(self.name)
-        elif self.reg_class is Register.Acc:
-            return "$a<{}>".format(self.name)
-        return "VirtualRegister(name={}, class={})".format(self.name, self.reg_class)
+        return self.reg_class.get_single_virt_reg_repr(self)
 
     def instanciate(self, color_map):
         return ArchRegister(color_map[self.reg_class][self], self.reg_class)
 
 
 class ImmediateValue:
+    """ Immediate (numerical) value """
     def __init__(self, value):
         self.value = value
 
 class DebugObject:
+    """ Structure to store and forwared debug information """
     def __init__(self, src_line, src_file=None):
         self.src_file = src_file
         self.src_line = src_line
@@ -214,7 +215,7 @@ class Program:
     def add_label(self, label, offset=None):
         """ Declare a new label @p label, if offset is None
             the offset associated with the label is the current program index
-            else @p offset value is used directly """
+            (end of program) else @p offset value is used directly """
         if offset is None:
             offset = len(self.bundle_list)
         self.label_map[label] = offset
