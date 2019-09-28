@@ -209,15 +209,6 @@ class Architecture:
     def get_empty_liverange_map(self):
         return LiveRangeMap(self.reg_pool.keys())
 
-class DummyArchitecture(Architecture):
-    def __init__(self, std_reg_num=16, acc_reg_num=16):
-        Architecture.__init__(self,
-            set([
-                RegFileDescription(Register.Std, std_reg_num, PhysicalRegister, VirtualRegister),
-                RegFileDescription(Register.Acc, acc_reg_num, PhysicalRegister, VirtualRegister)
-            ]),
-            INSN_PATTERN_MATCH
-        )
 
 class Program:
     def __init__(self, pre_defined_list=None, post_used_list=None):
@@ -511,18 +502,17 @@ class AddressPattern_Std(Pattern):
         return AddrValue(base=base_value, offset=offset_value), lexem_list
 
 class OpcodePattern(Pattern):
-    def __init__(self, opcode, tag="opcode"):
+    def __init__(self, tag="opcode"):
         Pattern.__init__(self, tag)
-        self.opcode = opcode
 
     def parse(self, arch, lexem_list):
         if len(lexem_list) == 0:
             return None
         else:
             head, lexem_list = lexem_list[0], lexem_list[1:]
-            if (not isinstance(head, Lexem)) or head.value != self.opcode:
+            if (not isinstance(head, Lexem)):
                 return None
-            return head, lexem_list
+            return head.value, lexem_list
 
 
 class SequentialPattern:
@@ -551,40 +541,61 @@ def instanciate_dual_reg(color_map, reg_class, reg_list):
     instanciated_list = [reg.instanciate(color_map) for reg in reg_list]
     return reg_class.build_multi_reg(instanciated_list)
 
-
-INSN_PATTERN_MATCH = {
-    "ld":   SequentialPattern(
-        [OpcodePattern("ld"), RegisterPattern_Std("dst"), AddressPattern_Std("addr")],
+LOAD_PATTERN = SequentialPattern(
+    [OpcodePattern("opc"), RegisterPattern_Std("dst"), AddressPattern_Std("addr")],
+    lambda result:
+        Instruction(result["opc"],
+                    use_list=(result["addr"].base + result["addr"].offset),
+                    def_list=result["dst"],
+                    dump_pattern=lambda color_map, use_list, def_list: "ld {} = {}[{}]".format(def_list[0].instanciate(color_map), use_list[1].instanciate(color_map), use_list[0].instanciate(color_map)))
+)
+STD_2OP_PATTERN = SequentialPattern(
+        [OpcodePattern("opc"), RegisterPattern_Std("dst"), RegisterPattern_Std("lhs"), RegisterPattern_Std("rhs")],
         lambda result:
-            Instruction("ld",
-                        use_list=(result["addr"].base + result["addr"].offset),
-                        def_list=result["dst"],
-                        dump_pattern=lambda color_map, use_list, def_list: "ld {} = {}[{}]".format(def_list[0].instanciate(color_map), use_list[1].instanciate(color_map), use_list[0].instanciate(color_map)))
-    ),
-    "add":  SequentialPattern(
-        [OpcodePattern("add"), RegisterPattern_Std("dst"), RegisterPattern_Std("lhs"), RegisterPattern_Std("rhs")],
-        lambda result:
-            Instruction("add",
+            Instruction(result["opc"],
                         use_list=(result["lhs"] + result["rhs"]),
                         def_list=result["dst"],
                         dump_pattern=lambda color_map, use_list, def_list: "add {} = {}, {}".format(def_list[0].instanciate(color_map), use_list[0].instanciate(color_map), use_list[1].instanciate(color_map)))
-    ),
-    "addd":  SequentialPattern(
-        [OpcodePattern("addd"), RegisterPattern_DualStd("dst"), RegisterPattern_Std("lhs"), RegisterPattern_Std("rhs")],
-        lambda result: Instruction("addd", use_list=(result["lhs"] + result["rhs"]), def_list=result["dst"], 
+    )
+DUAL_2OP_PATTERN = SequentialPattern(
+        [OpcodePattern("opc"), RegisterPattern_DualStd("dst"), RegisterPattern_Std("lhs"), RegisterPattern_Std("rhs")],
+        lambda result: Instruction(result["opc"], use_list=(result["lhs"] + result["rhs"]), def_list=result["dst"], 
                                    dump_pattern=lambda color_map, use_list, def_list: "addd {} = {}, {}".format(instanciate_dual_reg(color_map, Register.Std, def_list[0:2]), use_list[0].instanciate(color_map), use_list[1].instanciate(color_map)))
-    ),
-    "movefo":  SequentialPattern(
-        [OpcodePattern("movefo"), RegisterPattern_Acc("dst"), RegisterPattern_Std("lhs"), RegisterPattern_Std("rhs")],
-        lambda result: Instruction("movefo", use_list=(result["lhs"] + result["rhs"]), def_list=result["dst"],
+    )
+MOVEFO_PATTERN = SequentialPattern(
+        [OpcodePattern("opc"), RegisterPattern_Acc("dst"), RegisterPattern_Std("lhs"), RegisterPattern_Std("rhs")],
+        lambda result: Instruction(result["opc"], use_list=(result["lhs"] + result["rhs"]), def_list=result["dst"],
                                    dump_pattern=lambda color_map, use_list, def_list: "movefo {} = {}, {}".format(def_list[0].instanciate(color_map), use_list[0].instanciate(color_map), use_list[1].instanciate(color_map)))
-    ),
-    "movefa":  SequentialPattern(
+    )
+MOVEFA_PATTERN = SequentialPattern(
         [OpcodePattern("movefa"), RegisterPattern_Std("dst"), RegisterPattern_Acc("src")],
         lambda result: Instruction("movefo", use_list=(result["src"]), def_list=result["dst"],
                                    dump_pattern=lambda color_map, use_list, def_list: "movefa {} = {}".format(def_list[0].instanciate(color_map), use_list[0].instanciate(color_map)))
-    ),
+    )
+
+INSN_PATTERN_MATCH = {
+    "ld":   LOAD_PATTERN,
+
+    "add":  STD_2OP_PATTERN,
+    "sbf":  STD_2OP_PATTERN,
+
+    "addd":  DUAL_2OP_PATTERN,
+    "sbfd":  DUAL_2OP_PATTERN,
+
+    "movefo": MOVEFO_PATTERN,
+    "movefa": MOVEFA_PATTERN,
 }
+
+class DummyArchitecture(Architecture):
+    def __init__(self, std_reg_num=16, acc_reg_num=16):
+        Architecture.__init__(self,
+            set([
+                RegFileDescription(Register.Std, std_reg_num, PhysicalRegister, VirtualRegister),
+                RegFileDescription(Register.Acc, acc_reg_num, PhysicalRegister, VirtualRegister)
+            ]),
+            INSN_PATTERN_MATCH
+        )
+
 
 class AsmParser:
     def __init__(self, arch, program):
