@@ -7,6 +7,7 @@ def test_basic():
         "examples/test_basic_0.S",
         "examples/test_basic_2.S",
         "examples/test_dual_split_regs.S",
+        "examples/test_immediate.S",
     ]
     for test in test_list:
         print("executing {}".format(test))
@@ -14,3 +15,6 @@ def test_basic():
         print("{} test_ret={}".format(test, test_ret))
         assert test_ret == 0
 
+
+if __name__ == "__main__":
+    test_basic()
