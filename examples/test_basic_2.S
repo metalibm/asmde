@@ -1,6 +1,7 @@
 // testing for static acc registers
 //#PREDEFINED($r5, $r2, $r1, $r12)
 add R(p) = $r5, $r5
+;;
 ld R(p) = R(p)[$r12]
 ;;
 movefo $a0 = R(p), $r2

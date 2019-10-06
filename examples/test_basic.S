@@ -1,5 +1,6 @@
 //#PREDEFINED($r5, $r2, $r1, $r12)
 add R(p) = $r5, $r5
+;;
 ld R(p) = R(p)[$r12]
 ;;
 movefo A(acc) = R(p), $r2
