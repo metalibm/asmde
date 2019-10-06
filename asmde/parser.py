@@ -3,6 +3,7 @@
 import re
 import sys
 import argparse
+import collections
 
 import lexer
 
@@ -28,7 +29,7 @@ class Register:
         @classmethod
         def get_single_virt_reg_repr(reg_class, virt_reg):
             """ build a string representation for a single virtual register """
-            return reg_class.prefix + reg_class.reg_prefix + "<%s>".format(virt_reg.name)
+            return reg_class.prefix + reg_class.reg_prefix + "<{}>".format(virt_reg.name)
     class Std(RegClass):
         name = "Std"
         prefix = "$"
@@ -133,13 +134,14 @@ class DebugObject:
         return "Dbg(lineno={})".format(self.src_line)
 
 class Instruction:
-    def __init__(self, insn_object, def_list=None, use_list=None, dbg_object=None, dump_pattern=None):
+    def __init__(self, insn_object, def_list=None, use_list=None, dbg_object=None, dump_pattern=None, is_jump=False):
         self.insn_object = insn_object
         self.def_list = [] if def_list is None else def_list
         self.use_list = [] if use_list is None else use_list
         self.dbg_object = dbg_object
         # function (use_list, def_list) -> instruction string
         self.dump_pattern = dump_pattern
+        self.is_jump = is_jump
 
     def __repr__(self):
         return self.insn_object
@@ -156,6 +158,17 @@ class Bundle:
 
     def __repr__(self):
         return "Bundle({})".format(self.insn_list)
+
+    @property
+    def use_list(self):
+        return set(sum([insn.use_list for insn in self.insn_list], []))
+    @property
+    def def_list(self):
+        return set(sum([insn.def_list for insn in self.insn_list], []))
+
+    @property
+    def has_jump(self):
+        return any(insn.is_jump for insn in self.insn_list)
 
 
 class RegFileDescription:
@@ -189,7 +202,7 @@ class Architecture:
     """ Base class for architecture description """
     def __init__(self, reg_file_description_set, insn_patterns):
         self.reg_pool = dict((reg_desc.reg_class, RegFile(reg_desc)) for reg_desc in reg_file_description_set)
-        # table (insn pattern) -> Pattern 
+        # table (insn pattern) -> Pattern
         self.insn_patterns = insn_patterns
 
     def get_max_register_index_by_class(self, reg_class):
@@ -204,25 +217,133 @@ class Architecture:
     def get_empty_liverange_map(self):
         return LiveRangeMap(self.reg_pool.keys())
 
+class BasicBlock:
+    index_count = 0
+    per_index_map = {}
+
+    def __init__(self, label="undef"):
+        # list of predecessors
+        self.preds = []
+        # list of successors
+        self.succs = []
+        # index in program order
+        self.index = BasicBlock.get_new_index()
+
+        self.label = label
+
+        # ensuring index unicity
+        assert (not self.index in BasicBlock.per_index_map)
+        # registering block into class map
+        BasicBlock.per_index_map[self.index] = self
+
+        self.bundle_list = []
+        self.label_list = []
+
+
+    def __repr__(self):
+        return "BB {}".format(self.label)
+
+    @staticmethod
+    def get_new_index():
+        """ Create a new (unique) index for a BB """
+        new_index = BasicBlock.index_count
+        BasicBlock.index_count += 1
+        return new_index
+
+    @property
+    def empty(self):
+        return len(self.bundle_list) == 0
+
+    @property
+    def fallback(self):
+        """ basic block fall backs to the next one if it does not end with
+            a jump """
+        return not self.bundle_list[-1].has_jump
+
+    def add_bundle(self, bundle):
+        self.bundle_list.append(bundle)
+
+    def add_label(self, label):
+        self.label_list.append(label)
+
+    def add_predecessor(self, pred):
+        self.preds.append(pred)
+    def add_successor(self, succ):
+        self.succs.append(succ)
+
+    def connect_to(self, succ):
+        succ.add_predecessor(self)
+        self.add_successor(succ)
+
+
+    def merge_in(self, merged_bb):
+        """ Merge self and merged_bb basic-block into self """
+        self.preds += merged_bb.preds
+        self.succs += merged_bb.succs
+        assert (self.bundle_list == [] or merged_bb.bundle_list == [])
+        self.bundle_list = self.bundle_list or merged_bb.bundle_list
+        assert (self.index is None or merged_bb.index is None)
+        self.index = self.index or merged_bb.index
+
 
 class Program:
     def __init__(self, pre_defined_list=None, post_used_list=None):
         self.pre_defined_list = [] if pre_defined_list is None else pre_defined_list
         self.post_used_list = [] if post_used_list is None else post_used_list
-        self.bundle_list = []
+        self.bb_list = []
+        self.bb_label_map = {}
+        self.source_bb = self.add_bb("source")
+        self.sink_bb = self.add_bb("sink")
+        self.current_bb = self.add_bb()
+
+        self.source_bb.connect_to(self.current_bb)
         # dict <label_name> : program offset (in bundles)
-        self.label_map = {}
+        #self.label_map = {}
+
 
     def add_bundle(self, bundle):
-        self.bundle_list.append(bundle)
+        self.current_bb.add_bundle(bundle)
+        # self.bundle_list.append(bundle)
+
+    def add_bb(self, label="undef"):
+        new_bb = BasicBlock(label)
+        self.bb_list.append(new_bb)
+        return new_bb
+
+    def end_program(self):
+        """ end current program, check if last BB is a fallback and connect it to sink if required """
+        if self.current_bb != self.sink_bb and self.current_bb.fallback:
+            self.current_bb.connect_to(self.sink_bb)
+
+    def get_bb_by_label(self, label):
+        """ search if label is already linked to a BasicBlock,
+            if so returns it, else create one """
+        if not label in self.bb_label_map:
+            self.bb_label_map[label] = self.add_bb(label)
+        return self.bb_label_map[label]
 
     def add_label(self, label, offset=None):
         """ Declare a new label @p label, if offset is None
             the offset associated with the label is the current program index
             (end of program) else @p offset value is used directly """
-        if offset is None:
-            offset = len(self.bundle_list)
-        self.label_map[label] = offset
+        if not self.current_bb.empty:
+            # finishing previous BB and opening a new one
+            previous_bb = self.current_bb
+            self.current_bb = self.add_bb(label)
+            if previous_bb.fallback:
+                previous_bb.connect_to(self.current_bb)
+        if label in self.bb_label_map:
+            # merging several basic-blocks
+            self.current_bb.merge_in(self.bb_label_map[label])
+            for bb_label in self.current_bb.label_list:
+                self.bb_label_map[bb_label] = self.current_bb
+        else:
+            self.current_bb.label = label
+            self.bb_label_map[label] = self.current_bb
+
+        #if offset is None:
+        #    offset = len(self.bundle_list)
+        #self.label_map[label] = offset
 
 def NextLexem_OperatorPredicate(op_value):
     """ construct a predicate: lexem_list -> boolean
@@ -509,6 +630,19 @@ class OpcodePattern(Pattern):
                 return None
             return head.value, lexem_list
 
+class LabelPattern(Pattern):
+    def __init__(self, tag="label"):
+        Pattern.__init__(self, tag)
+
+    def parse(self, arch, lexem_list):
+        if len(lexem_list) == 0:
+            return None
+        else:
+            head, lexem_list = lexem_list[0], lexem_list[1:]
+            if (not isinstance(head, Lexem)):
+                return None
+            return head.value, lexem_list
+
 
 class SequentialPattern:
     def __init__(self, elt_pattern_list, result_builder):
@@ -566,6 +700,12 @@ MOVEFA_PATTERN = SequentialPattern(
         [OpcodePattern("movefa"), RegisterPattern_Std("dst"), RegisterPattern_Acc("src")],
         lambda result: Instruction("movefo", use_list=(result["src"]), def_list=result["dst"],
                                    dump_pattern=lambda color_map, use_list, def_list: "movefa {} = {}".format(def_list[0].instanciate(color_map), use_list[0].instanciate(color_map)))
+    )
+
+GOTO_PATTERN = SequentialPattern(
+        [OpcodePattern("opc"), LabelPattern("dst")],
+        lambda result: Instruction(result["opc"], is_jump=True,
+                                   dump_pattern=lambda color_map, use_list, def_list: "goto {}".format(use_list["dst"]))
     )
 
 INSN_PATTERN_MATCH = {
@@ -632,6 +772,12 @@ class AsmParser:
                 insn_object.dbg_object = dbg_object
                 # registering instruction
                 self.ongoing_bundle.add_insn(insn_object)
+                if insn_object.is_jump:
+                    # succ = self.program.bb_label_map[insn_object.use_list[0]]
+                    succ = self.program.get_bb_by_label(insn_object.use_list[0])
+                    self.program.current_bb.add_successor(succ)
+                    succ.add_predecessor(self.program.current_bb)
+
         else:
             raise NotImplementedError
 
@@ -695,6 +841,19 @@ class AsmParser:
             # trying to parse a virtual register
             return self.parse_virtual_register(lexem_list)
 
+
+class VarUseDef:
+    def __init__(self, loc, var, dbg_object=None):
+        self.loc = loc
+        self.var = var
+        self.dbg_object = dbg_object
+
+class VarDef(VarUseDef):
+    """ Variable definition """
+    pass
+class VarUse(VarUseDef):
+    """ Variable use """
+    pass
 
 class LiveRange:
     def __init__(self, start=None, stop=None, start_dbg_object=None, stop_dbg_object=None):
@@ -771,7 +930,7 @@ class PostProgram:
 class LiveRangeMap(object):
     """ Structure to store and manipulate register live ranges """
     def __init__(self, reg_class_list):
-        self.liverange_map = dict((reg_class, {}) for reg_class in reg_class_list)
+        self.liverange_map = dict((reg_class, collections.defaultdict(list)) for reg_class in reg_class_list)
 
     def __contains__(self, key):
         return key in self.liverange_map[key.reg_class]
@@ -818,25 +977,98 @@ class RegisterAssignator:
     def process_program(self, bundle_list):
         pass
 
-    def generate_liverange_map(self, program, liverange_map):
+    def generate_use_def_lists(self, program):
+        """ List variable use and defs in program """
+        use_list, def_list = {}, {}
+        var_gens = collections.defaultdict(set)
+        var_kills = collections.defaultdict(set)
+        for bb in program.bb_list:
+            # set of already defined variables
+            already_def_set = set()
+            for index, bundle in enumerate(bb.bundle_list):
+                for reg in bundle.use_list:
+                    # discard non register element (e.g. ImmediateValue)
+                    if not isinstance(reg, Register): continue
+                    if not reg in use_list: use_list[reg] = []
+                    use_list[reg].append(VarUse((bb, index), reg, ))
+                    if not reg in already_def_set:
+                        # variable is used without being previously
+                        # defined in the BB, it must be alive at BB entry
+                        var_gens[bb].add(reg)
+
+                for reg in bundle.def_list:
+                    # discard non register element (e.g. ImmediateValue)
+                    if not isinstance(reg, Register): continue
+                    if not reg in def_list: def_list[reg] = []
+                    var_def = VarDef((bb, index), reg)
+                    def_list[reg].append(var_def)
+                    var_kills[bb].add(reg)
+                    already_def_set.add(reg)
+
+
+        var_ins = collections.defaultdict(set)
+        var_out = collections.defaultdict(set)
+        # adding post used list into sink BB
+        for reg in program.post_used_list:
+            var_ins[program.sink_bb].add(reg)
+            var_out[program.sink_bb].add(reg)
+
+        # TODO(OPT): topological order for worklist (starting from sink)
+        worklist = [bb for bb in program.sink_bb.preds] + [bb for bb in program.bb_list] + [program.source_bb]
+        while worklist != []:
+            bb = worklist.pop(0)
+            if bb is program.sink_bb:
+                # discard sink_bb which has no successor
+                continue
+            # out leaving variables is the union of leaving variable
+            # at the entry of all successors
+            var_out[bb] = set().union(*tuple(var_ins[succ] for succ in bb.succs))
+            ins_bb = var_out[bb].difference(var_kills[bb]).union(var_gens[bb])
+            if len(ins_bb.difference(var_ins[bb])) != 0:
+                # var_ins[bb] is modified by current iteration
+                for pred in bb.preds:
+                    worklist.append(pred)
+            var_ins[bb] = ins_bb
+
+        return var_ins, var_out
+
+
+    def generate_liverange_map(self, program, liverange_map, var_ins, var_out):
         """ generate a dict key -> list of disjoint live-ranges
             mapping each variable to its liverange """
-        for index, bundle in enumerate(program.bundle_list):
-            for insn in bundle.insn_list:
-                for reg in insn.use_list:
-                    if not isinstance(reg, Register):
-                        # discard non register element (e.g. ImmediateValue)
-                        continue
-                    if not reg in liverange_map:
-                        liverange_map[reg] = [LiveRange()]
-                    # we update the last inserted LiveRange object in reg's list
-                    liverange_map[reg][-1].update_stop(index, dbg_object=insn.dbg_object)
-                for reg in insn.def_list:
-                    if not reg in liverange_map:
-                        liverange_map[reg] = []
-                    if not(len(liverange_map[reg]) and liverange_map[reg][-1].start == index): 
-                        # only register a liverange once per index value
-                        liverange_map[reg].append(LiveRange(start=index, start_dbg_object=insn.dbg_object))
+        # each range only covers a single BB
+        # complete range is the accumulation of this sub-range segment
+        for bb_index, bb in enumerate(program.bb_list):
+            # initializing BB's LiveRange by iterating over var_ins
+            for reg in var_ins[bb]:
+                liverange_map[reg].append(LiveRange(start=(bb_index, -1)))
+            # iterating over bundle in BB (in program order)
+            for index, bundle in enumerate(bb.bundle_list):
+                for insn in bundle.insn_list:
+                    for reg in insn.use_list:
+                        if not isinstance(reg, Register):
+                            # discard non register element (e.g. ImmediateValue)
+                            continue
+                        if not reg in liverange_map:
+                            liverange_map[reg] = [LiveRange()]
+                        # we update the last inserted LiveRange object in reg's list
+                        liverange_map[reg][-1].update_stop((bb_index, index), dbg_object=insn.dbg_object)
+                    for reg in insn.def_list:
+                        if not reg in liverange_map:
+                            liverange_map[reg] = []
+                        if not(len(liverange_map[reg]) and liverange_map[reg][-1].start == (bb_index, index)): 
+                            # only register a liverange once per index value
+                            liverange_map[reg].append(LiveRange(start=(bb_index, index), start_dbg_object=insn.dbg_object))
+            # closing BB's LiveRange by iterating over var_out
+            final_bb_index = len(bb.bundle_list)
+            for reg in var_out[bb]:
+                if not reg in liverange_map:
+                    print("reg must be alive at end of BB {} and is not !".format(bb_index))
+                    sys.exit(1)
+                elif liverange_map[reg][-1].start[0] != bb_index:
+                    print("latest liverange for reg {}, {} does not match expected BB's index{}, {}".format(reg, liverange_map[reg][-1], bb_index, liverange_map[reg][-1].start[0]))
+                    sys.exit(1)
+                liverange_map[reg][-1].update_stop((bb_index, final_bb_index)) 
         return liverange_map
 
     def check_liverange_map(self, liverange_map):
@@ -998,8 +1230,13 @@ if __name__ == "__main__":
                 print(lexem_list)
             dbg_object = DebugObject(line_no)
             asm_parser.parse_asm_line(lexem_list, dbg_object=dbg_object)
-        print(asm_parser.program.bundle_list)
-        print(asm_parser.program.label_map)
+        # finish program (e.g. connecting last BB to sink)
+        asm_parser.program.end_program()
+        print(asm_parser.program.bb_list)
+        for label in asm_parser.program.bb_label_map:
+            print("label: {}".format(label))
+            print(asm_parser.program.bb_label_map[label].bundle_list)
+        #print(asm_parser.program.label_map)
     # manage file I/O exception
 
     print("Register Assignation")
@@ -1007,20 +1244,30 @@ if __name__ == "__main__":
 
     empty_liverange_map = args.arch.get_empty_liverange_map()
 
-    print("Declaring pre-defined registers")
-    empty_liverange_map.populate_pre_defined_list(program)
+    #print("Declaring pre-defined registers")
+    #empty_liverange_map.populate_pre_defined_list(program)
 
-    liverange_map = reg_assignator.generate_liverange_map(asm_parser.program, empty_liverange_map)
+    var_ins, var_out = reg_assignator.generate_use_def_lists(asm_parser.program)
+    liverange_map = reg_assignator.generate_liverange_map(asm_parser.program, empty_liverange_map, var_ins, var_out)
 
-    print("Declaring post-used registers")
-    liverange_map.populate_post_used_list(program)
-    print(liverange_map)
+    print("Checking pre-defined register consistency")
+    for reg in program.pre_defined_list:
+        if not reg in var_out[program.source_bb]:
+            print("{} is declared in pre-defined list but not alive at program source".format(reg))
+            sys.exit(1)
+    for reg in var_out[program.source_bb]:
+        if not reg in program.pre_defined_list:
+            print("{} is alive at program source but not declared in pre-defined list".format(reg))
+            sys.exit(1)
+    print("Variable alive at source BB: {}".format([reg for reg in var_out[program.source_bb]]))
+    print("Variable alive at sink BB: {}".format([reg for reg in var_ins[program.sink_bb]]))
 
     print("Checking liveranges")
     liverange_status = reg_assignator.check_liverange_map(liverange_map)
     print(liverange_status)
     if not liverange_status:
-        sys.exit(1)
+        # sys.exit(1)
+        pass
 
     print("Graph coloring")
     conflict_map = reg_assignator.create_conflict_map(liverange_map)
@@ -1040,14 +1287,15 @@ if __name__ == "__main__":
                 if reg.is_virtual():
                     output_callback("#define {} {}\n".format(reg.name, color_map[reg_class][reg]))
 
-    def dump_program(program, color_map):
-        for bundle in program:
-            for insn in bundle.insn_list:
-                if not insn.dump_pattern is None:
-                    # use_list = [reg.instanciate(color_map) for reg in insn.use_list]
-                    # def_list = [reg.instanciate(color_map) for reg in insn.def_list]
+    def dump_program(bb_list, color_map):
+        for bb in bb_list:
+            for bundle in bb.bundle_list:
+                for insn in bundle.insn_list:
+                    if not insn.dump_pattern is None:
+                        # use_list = [reg.instanciate(color_map) for reg in insn.use_list]
+                        # def_list = [reg.instanciate(color_map) for reg in insn.def_list]
 
-                    print(insn.dump_pattern(color_map, insn.use_list, insn.def_list))
+                        print(insn.dump_pattern(color_map, insn.use_list, insn.def_list))
 
             print(";;")
 
@@ -1059,5 +1307,5 @@ if __name__ == "__main__":
             dump_allocation(color_map, lambda s: output_stream.write(s))
 
     print("dumping program")
-    dump_program(asm_parser.program.bundle_list, color_map)
+    dump_program(asm_parser.program.bb_list, color_map)
 
