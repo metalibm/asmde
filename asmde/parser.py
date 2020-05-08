@@ -456,6 +456,8 @@ class AsmParser:
                 self.ongoing_bundle.add_insn(insn_object)
                 if insn_object.is_jump:
                     # succ = self.program.bb_label_map[insn_object.use_list[0]]
+                    # TODO/FIXME jump bb label should be extract with method
+                    #            and not directly from index 0 of use_list
                     succ = self.program.get_bb_by_label(insn_object.use_list[0])
                     self.program.current_bb.add_successor(succ)
                     succ.add_predecessor(self.program.current_bb)
