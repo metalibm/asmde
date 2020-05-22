@@ -176,7 +176,7 @@ class RegFile:
     def get_unique_phys_reg_object(self, index):
         if index > self.description.num_phys_reg:
             print("regfile for class {} contains only {} register(s), request for index: {}".format(self.description.reg_class.name, self.description.num_phys_reg, index))
-            sys.exit(1)
+            raise Exception()
         return self.physical_pool[index]
 
     def get_unique_virt_reg_object(self, var_name, reg_constraint=no_constraint):
@@ -569,11 +569,11 @@ class RegisterAssignator:
             for reg in var_out[bb]:
                 if not reg in liverange_map:
                     print("reg must be alive at end of BB {} and is not !".format(bb_index))
-                    sys.exit(1)
+                    raise Exception()
                 elif liverange_map[reg][-1].start[0] != bb_index:
                     print("latest liverange for reg {}, {} does not match expected BB's index{}, {}".format(reg, liverange_map[reg][-1], bb_index, liverange_map[reg][-1].start[0]))
-                    sys.exit(1)
-                liverange_map[reg][-1].update_stop((bb_index, final_bb_index)) 
+                    raise Exception()
+                liverange_map[reg][-1].update_stop((bb_index, final_bb_index))
         return liverange_map
 
     def check_liverange_map(self, liverange_map):
@@ -672,7 +672,7 @@ class RegisterAssignator:
                 linked_allocation = allocate_reg_list([max_reg] + list(max_reg.get_linked_map().keys()), graph, color_map)
                 if linked_allocation is None:
                     print("no feasible allocation for {} and linked map {}".format(max_reg, max_reg.get_linked_map()))
-                    sys.exit(1)
+                    raise Exception()
 
                 num_reg_in_class = self.arch.get_max_register_index_by_class(reg_class)
                 for linked_reg in linked_allocation:
@@ -681,7 +681,7 @@ class RegisterAssignator:
                     # check on colour bound
                     if linked_color >= num_reg_in_class:
                         print("Error while assigning register of class {}, requesting index {}, only {} register(s) available".format(reg_class.name, linked_color, num_reg_in_class)) 
-                        sys.exit(1)
+                        raise Exception()
 
                     print("register {} of class {} has been assigned color {}".format(linked_reg, reg_class.name, linked_color))
 
