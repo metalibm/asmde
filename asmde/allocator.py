@@ -276,16 +276,19 @@ class BasicBlock:
 
 
 class Program:
-    def __init__(self, pre_defined_list=None, post_used_list=None):
+    def __init__(self, pre_defined_list=None, post_used_list=None, empty=False):
         self.pre_defined_list = [] if pre_defined_list is None else pre_defined_list
         self.post_used_list = [] if post_used_list is None else post_used_list
         self.bb_list = []
         self.bb_label_map = {}
         self.source_bb = self.add_bb("source")
         self.sink_bb = self.add_bb("sink")
-        self.current_bb = self.add_bb()
+        if not empty:
+            self.current_bb = self.add_bb()
+            self.source_bb.connect_to(self.current_bb)
+        else:
+            self.current_bb = None
 
-        self.source_bb.connect_to(self.current_bb)
         # dict <label_name> : program offset (in bundles)
         #self.label_map = {}
 
@@ -295,9 +298,14 @@ class Program:
         # self.bundle_list.append(bundle)
 
     def add_bb(self, label="undef"):
+        """ add a new BasicBlock without modifying self.current_bb reference """
         new_bb = BasicBlock(label)
         self.bb_list.append(new_bb)
         return new_bb
+
+    def add_new_current_bb(self, label="undef"):
+        self.current_bb = self.add_bb(label)
+        return self.current_bb
 
     def end_program(self):
         """ end current program, check if last BB is a fallback and connect it to sink if required """
