@@ -119,6 +119,9 @@ class DebugObject:
     def __repr__(self):
         return "Dbg(lineno={})".format(self.src_line)
 
+    def __str__(self):
+        return "line {}".format(self.src_line)
+
 class Instruction:
     def __init__(self, insn_object, def_list=None, use_list=None, dbg_object=None, dump_pattern=None, is_jump=False):
         self.insn_object = insn_object
@@ -566,16 +569,10 @@ class RegisterAssignator:
         for reg in liverange_map.get_all_registers():
             for liverange in liverange_map[reg]:
                 if liverange.start == None and liverange.stop != None:
-                    if liverange.stop_dbg_object is None:
-                        print("value {} is used @ {} without being defined!".format(reg, liverange.stop_dbg_object))
-                    else:
-                        print("value {} is used line {} without being defined!".format(reg, liverange.stop_dbg_object.src_line))
+                    print("value {} is used @ {} without being defined!".format(reg, liverange.stop_dbg_object))
                     error_count += 1
                 if liverange.stop == None and liverange.start != None:
-                    if liverange.start_dbg_object is None:
-                        print("value {} is defined @ {} without being used!".format(reg, liverange.stop_dbg_object))
-                    else:
-                        print("value {} is defined line {} without being used!".format(reg, liverange.start_dbg_object.src_line))
+                    print("value {} is defined @ {} without being used!".format(reg, liverange.start_dbg_object))
                     error_count += 1
         return error_count == 0
 
