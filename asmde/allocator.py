@@ -410,6 +410,10 @@ class LiveRange:
     def __repr__(self):
         return "[{}; {}]".format(self.start, self.stop)
 
+    @property
+    def is_valid(self):
+        return not (self.start is None or self.stop is None)
+
     def intersect(self, liverange):
         """ Check intersection between @p self range and @p liverange """
         #if liverange_bound_compare_lt(self.stop, liverange.start) or liverange_bound_compare_gt(self.start, liverange.stop):
