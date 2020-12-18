@@ -3,7 +3,7 @@
 import re
 
 class Lexem:
-    PATTERN = "[\w\d]+"
+    PATTERN = "[\w\d_]+"
 
     def __init__(self, value):
         self.value = value
