@@ -45,7 +45,7 @@ class CommentHeadLexem(Lexem):
 
 # extended regular expression for seperator, including
 # separators that will be included as valid lexems
-SEP_PATTERN = "([ \t,=\[\]\.])+"
+SEP_PATTERN = "([ \t,=\[\]\.<>])+"
 
 # DUMMY SEPARATOR (to be discarded during lexing)
 DUMMY_SEP_PATTERN = "[ \t,=]+"
