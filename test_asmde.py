@@ -13,12 +13,12 @@ def test_basic():
     # testing all available examples
     for test in test_list:
         print("executing {}".format(test))
-        test_ret = subprocess.check_call("python3 asmde/parser.py --input {}".format(test).split(" "))
+        test_ret = subprocess.check_call("python3 asmde.py --input {}".format(test).split(" "))
         print("{} test_ret={}".format(test, test_ret))
         assert test_ret == 0
 
     # testing writing output file
-    test_ret = subprocess.check_call("python3 asmde/parser.py --input {} --output {}".format(
+    test_ret = subprocess.check_call("python3 asmde.py --input {} --output {}".format(
         "examples/test_basic_2.S",
         "test_basic_2.regalloc.h").split(" "))
     assert test_ret == 0

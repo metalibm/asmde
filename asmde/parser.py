@@ -2,28 +2,25 @@
 
 import re
 import sys
-import argparse
 import collections
 
-import lexer
+import asmde.lexer
 
-from lexer import (
+from asmde.lexer import (
     Lexem, RegisterLexem,
     LabelEndLexem, CommentHeadLexem,
     ImmediateLexem, OperatorLexem,
     BundleSeparatorLexem, MacroLexem,
 )
 
-from allocator import (
+from asmde.allocator import (
     Register, PhysicalRegister, ImmediateValue,
     VirtualRegister,
     DebugObject, Instruction, Bundle,
     RegFileDescription, RegFile, Architecture,
-    BasicBlock, Program,
+    BasicBlock,
     even_indexed_register,
     odd_indexed_register,
-
-    RegisterAssignator,
 )
 
 
@@ -347,72 +344,6 @@ class SequentialPattern:
         return self.result_builder(match_result), lexem_list
 
 
-def instanciate_dual_reg(color_map, reg_class, reg_list):
-    """ Instanciate a pair of registers formed by the registers in reg_list """
-    instanciated_list = [reg.instanciate(color_map) for reg in reg_list]
-    return reg_class.build_multi_reg(instanciated_list)
-
-LOAD_PATTERN = SequentialPattern(
-    [OpcodePattern("opc"), RegisterPattern_Std("dst"), AddressPattern_Std("addr")],
-    lambda result:
-        Instruction(result["opc"],
-                    use_list=(result["addr"].base + result["addr"].offset),
-                    def_list=result["dst"],
-                    dump_pattern=lambda color_map, use_list, def_list: "ld {} = {}[{}]".format(def_list[0].instanciate(color_map), use_list[1].instanciate(color_map), use_list[0].instanciate(color_map)))
-)
-STD_2OP_PATTERN = SequentialPattern(
-        [OpcodePattern("opc"), RegisterPattern_Std("dst"), RegisterPattern_Std("lhs"), RegisterPattern_Std("rhs")],
-        lambda result:
-            Instruction(result["opc"],
-                        use_list=(result["lhs"] + result["rhs"]),
-                        def_list=result["dst"],
-                        dump_pattern=lambda color_map, use_list, def_list: "add {} = {}, {}".format(def_list[0].instanciate(color_map), use_list[0].instanciate(color_map), use_list[1].instanciate(color_map)))
-    )
-DUAL_2OP_PATTERN = SequentialPattern(
-        [OpcodePattern("opc"), RegisterPattern_DualStd("dst"), RegisterPattern_Std("lhs"), RegisterPattern_Std("rhs")],
-        lambda result: Instruction(result["opc"], use_list=(result["lhs"] + result["rhs"]), def_list=result["dst"], 
-                                   dump_pattern=lambda color_map, use_list, def_list: "addd {} = {}, {}".format(instanciate_dual_reg(color_map, Register.Std, def_list[0:2]), use_list[0].instanciate(color_map), use_list[1].instanciate(color_map)))
-    )
-MOVEFO_PATTERN = SequentialPattern(
-        [OpcodePattern("opc"), RegisterPattern_Acc("dst"), RegisterPattern_Std("lhs"), RegisterPattern_Std("rhs")],
-        lambda result: Instruction(result["opc"], use_list=(result["lhs"] + result["rhs"]), def_list=result["dst"],
-                                   dump_pattern=lambda color_map, use_list, def_list: "movefo {} = {}, {}".format(def_list[0].instanciate(color_map), use_list[0].instanciate(color_map), use_list[1].instanciate(color_map)))
-    )
-MOVEFA_PATTERN = SequentialPattern(
-        [OpcodePattern("movefa"), RegisterPattern_Std("dst"), RegisterPattern_Acc("src")],
-        lambda result: Instruction("movefo", use_list=(result["src"]), def_list=result["dst"],
-                                   dump_pattern=lambda color_map, use_list, def_list: "movefa {} = {}".format(def_list[0].instanciate(color_map), use_list[0].instanciate(color_map)))
-    )
-
-GOTO_PATTERN = SequentialPattern(
-        [OpcodePattern("opc"), LabelPattern("dst")],
-        lambda result: Instruction(result["opc"], is_jump=True,
-                                   dump_pattern=lambda color_map, use_list, def_list: "goto {}".format(use_list["dst"]))
-    )
-
-INSN_PATTERN_MATCH = {
-    "ld":   LOAD_PATTERN,
-
-    "add":  STD_2OP_PATTERN,
-    "sbf":  STD_2OP_PATTERN,
-
-    "addd":  DUAL_2OP_PATTERN,
-    "sbfd":  DUAL_2OP_PATTERN,
-
-    "movefo": MOVEFO_PATTERN,
-    "movefa": MOVEFA_PATTERN,
-}
-
-class DummyArchitecture(Architecture):
-    def __init__(self, std_reg_num=16, acc_reg_num=16):
-        Architecture.__init__(self,
-            set([
-                RegFileDescription(Register.Std, std_reg_num, PhysicalRegister, VirtualRegister),
-                RegFileDescription(Register.Acc, acc_reg_num, PhysicalRegister, VirtualRegister)
-            ]),
-            INSN_PATTERN_MATCH
-        )
-
 
 class AsmParser:
     def __init__(self, arch, program):
@@ -528,114 +459,6 @@ class AsmParser:
 
 
 
-def parse_architecture(arch_str_desc):
-    ARCH_CTOR_MAP = {
-        "dummy": DummyArchitecture
-    }
-
-    return ARCH_CTOR_MAP[arch_str_desc]()
 
 
-if __name__ == "__main__":
-    # command line options
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--lexer-verbose", action="store_const", default=False, const=True, help="enable lexer verbosity")
-
-    parser.add_argument("--output", action="store", default=None, help="select output file (default stdout)")
-    parser.add_argument("--input", action="store", help="select input file")
-    parser.add_argument("--arch", action="store", default=DummyArchitecture(), type=parse_architecture, help="select target architecture")
-
-    args = parser.parse_args()
-
-    program = Program()
-    asm_parser = AsmParser(args.arch, program)
-
-    print("parsing input program")
-    with open(args.input, "r") as input_stream:
-        # TODO/FIXME: optimize file reading (line by line rather than full file at once)
-        full_input_file = input_stream.read()
-        for line_no, line in enumerate(full_input_file.split("\n")):
-            lexem_list = lexer.generate_line_lexems(line)
-            if args.lexer_verbose:
-                print(lexem_list)
-            dbg_object = DebugObject(line_no)
-            asm_parser.parse_asm_line(lexem_list, dbg_object=dbg_object)
-        # finish program (e.g. connecting last BB to sink)
-        asm_parser.program.end_program()
-        print(asm_parser.program.bb_list)
-        for label in asm_parser.program.bb_label_map:
-            print("label: {}".format(label))
-            print(asm_parser.program.bb_label_map[label].bundle_list)
-        #print(asm_parser.program.label_map)
-    # manage file I/O exception
-
-    print("Register Assignation")
-    reg_assignator = RegisterAssignator(args.arch)
-
-    empty_liverange_map = args.arch.get_empty_liverange_map()
-
-    #print("Declaring pre-defined registers")
-    #empty_liverange_map.populate_pre_defined_list(program)
-
-    var_ins, var_out = reg_assignator.generate_use_def_lists(asm_parser.program)
-    liverange_map = reg_assignator.generate_liverange_map(asm_parser.program, empty_liverange_map, var_ins, var_out)
-
-    print("Checking pre-defined register consistency")
-    for reg in program.pre_defined_list:
-        if not reg in var_out[program.source_bb]:
-            print("{} is declared in pre-defined list but not alive at program source".format(reg))
-            sys.exit(1)
-    for reg in var_out[program.source_bb]:
-        if not reg in program.pre_defined_list:
-            print("{} is alive at program source but not declared in pre-defined list".format(reg))
-            sys.exit(1)
-    print("Variable alive at source BB: {}".format([reg for reg in var_out[program.source_bb]]))
-    print("Variable alive at sink BB: {}".format([reg for reg in var_ins[program.sink_bb]]))
-
-    print("Checking liveranges")
-    liverange_status = reg_assignator.check_liverange_map(liverange_map)
-    print(liverange_status)
-    if not liverange_status:
-        # sys.exit(1)
-        pass
-
-    print("Graph coloring")
-    conflict_map = reg_assignator.create_conflict_map(liverange_map)
-    color_map = reg_assignator.create_color_map(conflict_map)
-    for reg_class in conflict_map:
-        conflict_graph = conflict_map[reg_class]
-        class_color_map = color_map[reg_class]
-        check_status = reg_assignator.check_color_map(conflict_graph, class_color_map)
-        if not check_status:
-            print("register assignation for class {} does is not valid")
-            sys.exit(1)
-
-    def dump_allocation(color_map, output_callback):
-        """ dump virtual register allocation mapping """
-        for reg_class in color_map:
-            for reg in color_map[reg_class]:
-                if reg.is_virtual():
-                    output_callback("#define {} {}\n".format(reg.name, color_map[reg_class][reg]))
-
-    def dump_program(bb_list, color_map):
-        for bb in bb_list:
-            for bundle in bb.bundle_list:
-                for insn in bundle.insn_list:
-                    if not insn.dump_pattern is None:
-                        # use_list = [reg.instanciate(color_map) for reg in insn.use_list]
-                        # def_list = [reg.instanciate(color_map) for reg in insn.def_list]
-
-                        print(insn.dump_pattern(color_map, insn.use_list, insn.def_list))
-
-            print(";;")
-
-
-    if args.output is None:
-        dump_allocation(color_map, lambda s: print(s, end=""))
-    else:
-        with open(args.output, "w") as output_stream:
-            dump_allocation(color_map, lambda s: output_stream.write(s))
-
-    print("dumping program")
-    dump_program(asm_parser.program.bb_list, color_map)
 
