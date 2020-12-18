@@ -396,6 +396,59 @@ class AsmParser:
         else:
             raise NotImplementedError
 
+    def parse_objdump_line(self, lexem_list, dbg_object):
+        if not len(lexem_list): return
+        head = lexem_list[0]
+        if isinstance(head, BundleSeparatorLexem):
+            self.program.add_bundle(self.ongoing_bundle)
+            self.ongoing_bundle = Bundle()
+        elif isinstance(head, MacroLexem):
+            self.parse_macro(lexem_list[1:], dbg_object)
+        elif isinstance(head, CommentHeadLexem):
+            pass
+        elif isinstance(head, Lexem):
+            if head.value == "Disassembly":
+                # skipping "Dissasembly of section ..."
+                pass
+            elif isinstance(lexem_list[1], LabelEndLexem):
+                if len(self.ongoing_bundle) != 0:
+                    print("Error: label can not be inserted in the middle of a bundle @ {}".format(dbg_object))
+                    sys.exit(1)
+                self.program.add_label(head.value)
+
+            else:
+                if head.value in self.arch.insn_patterns:
+                    insn_pattern = self.arch.insn_patterns[head.value]
+                    insn_match = insn_pattern.match(self.arch, lexem_list)
+                    if insn_match is None:
+                        print("failed to match {} in {}".format(head.value, lexem_list))
+                        sys.exit(1)
+                    else:
+                        insn_object, lexem_list = insn_match
+
+                else:
+                    print("unable to parse {} @ {}".format(lexem_list, dbg_object))
+                    raise NotImplementedError
+                # adding meta information
+                insn_object.dbg_object = dbg_object
+                # registering instruction
+                self.ongoing_bundle.add_insn(insn_object)
+                if insn_object.is_jump:
+                    # succ = self.program.bb_label_map[insn_object.use_list[0]]
+                    # TODO/FIXME jump bb label should be extract with method
+                    #            and not directly from index 0 of use_list
+                    succ = self.program.get_bb_by_label(insn_object.use_list[0])
+                    self.program.current_bb.add_successor(succ)
+                    succ.add_predecessor(self.program.current_bb)
+                # in objdump file, a instruction line may be ended by a bundle separator
+                #   goto label;;
+                if isinstance(lexem_list[-1], BundleSeparatorLexem):
+                    self.program.add_bundle(self.ongoing_bundle)
+                    self.ongoing_bundle = Bundle()
+
+        else:
+            raise NotImplementedError
+
     def parse_macro(self, lexem_list, dbg_object):
         """ parse macro line once '//#' has been consumed """
         macro_name = lexem_list[0]

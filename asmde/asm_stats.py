@@ -1,9 +1,11 @@
 import argparse
 import collections
 
-from allocator import Program, DebugObject
-from parser import AsmParser, DummyArchitecture, parse_architecture
-import lexer
+from asmde.allocator import Program, DebugObject
+from asmde.parser import AsmParser
+from arch.dummy import DummyArchitecture
+from asmde. arch_list import parse_architecture
+import asmde.lexer as lexer
 
 
 class ProgramStatistics:
@@ -30,6 +32,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--output", action="store", default=None, help="select output file (default stdout)")
     parser.add_argument("--input", action="store", help="select input file")
+    parser.add_argument("--objdump", action="store_const", default=False, const=True, help="indicate that assembly input is in objdump form")
     parser.add_argument("--arch", action="store", default=DummyArchitecture(), type=parse_architecture, help="select target architecture")
 
     args = parser.parse_args()
@@ -46,7 +49,15 @@ if __name__ == "__main__":
             if args.lexer_verbose:
                 print(lexem_list)
             dbg_object = DebugObject(line_no)
-            asm_parser.parse_asm_line(lexem_list, dbg_object=dbg_object)
+            try:
+                if args.objdump:
+                    asm_parser.parse_objdump_line(lexem_list, dbg_object=dbg_object)
+                else:
+                    asm_parser.parse_asm_line(lexem_list, dbg_object=dbg_object)
+            except:
+                print("error @line {}, {}".format(line_no, line))
+                print(lexem_list)
+                raise
         # finish program (e.g. connecting last BB to sink)
         asm_parser.program.end_program()
         print(asm_parser.program.bb_list)
