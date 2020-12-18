@@ -24,6 +24,12 @@ class RegisterLexem(Lexem):
     def __repr__(self):
         return "RegisterLexem({})".format(self.value)
 
+class SpecialRegisterLexem(Lexem):
+    PATTERN = "\$([\w\d]+)"
+
+    def __repr__(self):
+        return "SpecialRegisterLexem({})".format(self.value)
+
 class ImmediateLexem(Lexem):
     PATTERN = "([+-]|)[0-9]+"
 
@@ -55,7 +61,7 @@ def generate_line_lexems(s):
     lexem_list = []
     for sub_word in re.split(SEP_PATTERN, s):
         lexem_match = None
-        for lexem_class in [CommentHeadLexem, LabelEndLexem, MacroLexem, ImmediateLexem, RegisterLexem, OperatorLexem, BundleSeparatorLexem, Lexem]:
+        for lexem_class in [CommentHeadLexem, LabelEndLexem, MacroLexem, ImmediateLexem, RegisterLexem, OperatorLexem, BundleSeparatorLexem, Lexem, SpecialRegisterLexem]:
             lexem_match = lexem_class.match(sub_word)
             if lexem_match is None:
                 continue
