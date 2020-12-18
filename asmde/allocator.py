@@ -425,6 +425,8 @@ class LiveRange:
     def intersect(self, liverange):
         """ Check intersection between @p self range and @p liverange """
         #if liverange_bound_compare_lt(self.stop, liverange.start) or liverange_bound_compare_gt(self.start, liverange.stop):
+        assert not (self.stop is None or self.start is None)
+        assert not (liverange.start is None or liverange.stop is None)
         if self.stop <= liverange.start or self.start >= liverange.stop:
             return False
         return True
@@ -595,6 +597,14 @@ class RegisterAssignator:
         for reg_class in liverange_map.get_class_list():
             sub_liverange_map = liverange_map.get_class_map(reg_class)
             conflict_map[reg_class] = {}
+            # check if any liverange is still undefined
+            for reg in sub_liverange_map:
+                for liverange in sub_liverange_map[reg]:
+                    if liverange.start is None or liverange.stop is None:
+                        print("sub liverange for reg {} contains undefined bound(s) ({})".format(reg, sub_liverange_map[reg]))
+                        raise Exception()
+
+            # building actual conflict map
             for reg in sub_liverange_map:
                 conflict_map[reg_class][reg] = set()
                 for reg2 in sub_liverange_map:
