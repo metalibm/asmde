@@ -145,6 +145,7 @@ class VirtualRegisterPattern_DualStd(VirtualRegisterPattern_DualReg):
 class PhysicalRegisterPattern(Pattern):
     """ pattern for physical register """
     REG_PATTERN = None
+    REG_LEXEM = RegisterLexem
 
     @staticmethod
     def get_unique_reg_obj(arch, index):
@@ -154,7 +155,7 @@ class PhysicalRegisterPattern(Pattern):
     def parse(PRP_Class, arch, lexem_list):
         if not len(lexem_list):
             return None
-        elif isinstance(lexem_list[0], RegisterLexem):
+        elif isinstance(lexem_list[0], PRP_Class.REG_LEXEM):
             #raise Exception("RegisterLexem was expected, got: {}".format(lexem))
             reg_lexem = lexem_list[0]
 
