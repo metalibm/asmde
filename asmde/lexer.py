@@ -33,6 +33,9 @@ class SpecialRegisterLexem(Lexem):
 class ImmediateLexem(Lexem):
     PATTERN = "([+-]|)[0-9]+"
 
+class HexImmediateLexem(Lexem):
+    PATTERN = "(\(|)([+-]|)0x[0-9a-fA-F]+(\)|)"
+
 class OperatorLexem(Lexem):
     PATTERN = "[()\[\]\.]"
 
@@ -51,7 +54,7 @@ class CommentHeadLexem(Lexem):
 
 # extended regular expression for seperator, including
 # separators that will be included as valid lexems
-SEP_PATTERN = "([ \t,=\[\]\.<>])+"
+SEP_PATTERN = "([ \t,=\.<>])+"
 
 # DUMMY SEPARATOR (to be discarded during lexing)
 DUMMY_SEP_PATTERN = "[ \t,=]+"
@@ -61,7 +64,7 @@ def generate_line_lexems(s):
     lexem_list = []
     for sub_word in re.split(SEP_PATTERN, s):
         lexem_match = None
-        for lexem_class in [CommentHeadLexem, LabelEndLexem, MacroLexem, ImmediateLexem, RegisterLexem, OperatorLexem, BundleSeparatorLexem, Lexem, SpecialRegisterLexem]:
+        for lexem_class in [CommentHeadLexem, LabelEndLexem, MacroLexem, HexImmediateLexem, ImmediateLexem, RegisterLexem, OperatorLexem, BundleSeparatorLexem, Lexem, SpecialRegisterLexem]:
             lexem_match = lexem_class.match(sub_word)
             if lexem_match is None:
                 continue
