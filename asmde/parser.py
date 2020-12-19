@@ -11,6 +11,7 @@ from asmde.lexer import (
     LabelEndLexem, CommentHeadLexem,
     ImmediateLexem, OperatorLexem,
     BundleSeparatorLexem, MacroLexem,
+    HexImmediateLexem,
 )
 
 from asmde.allocator import (
@@ -261,14 +262,31 @@ class RegisterPattern_Acc(RegisterPattern):
     PHYSICAL_PATTERN_CLASS = PhysicalRegisterPattern_Acc
 
 
+class ImmediatePattern(Pattern):
+    @staticmethod
+    def parse(arch, lexem_list):
+        imm_lexem = lexem_list[0]
+        if isinstance(imm_lexem, ImmediateLexem):
+            value = ImmediateValue(int(imm_lexem.value))
+            # if there is a post-fix HexImmediateLexem (as in objdump file
+            # we consume it also
+            if len(lexem_list) > 1 and isinstance(lexem_list[1], HexImmediateLexem):
+                lexem_list = lexem_list[2:]
+            else:
+                lexem_list = lexem_list[1:]
+            return value, lexem_list
+        else:
+            print("unrecognized lexem {} while parsing for immediate".format(offset_lexem))
+            raise NotImplementedError
+
 class OffsetPattern_Std(Pattern):
     """ pattern for address offset """
     @staticmethod
     def parse(arch, lexem_list):
         offset_lexem = lexem_list[0]
         if isinstance(offset_lexem, ImmediateLexem):
-            offset = [ImmediateValue(int(offset_lexem.value))]
-            lexem_list = lexem_list[1:]
+            offset_imm, lexem_list = ImmediatePattern.parse(arch, lexem_list)
+            offset = [offset_imm]
         elif isinstance(offset_lexem, RegisterLexem):
             offset, lexem_list = PhysicalRegisterPattern_Std.parse(arch, lexem_list)
         elif isinstance(offset_lexem, Lexem):
