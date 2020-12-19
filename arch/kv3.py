@@ -1,3 +1,5 @@
+from asmde.lexer import SpecialRegisterLexem
+
 from asmde.parser import (
     SequentialPattern, RegisterPattern_Std,
     AddressPattern_Std,
@@ -5,14 +7,26 @@ from asmde.parser import (
     RegisterPattern_DualStd,
     RegisterPattern_Acc,
     LabelPattern,
+    PhysicalRegisterPattern,
+    ImmediatePattern,
+    DisjonctivePattern,
 )
 
 
 
 from asmde.allocator import (
     Architecture, Instruction, RegFileDescription, Register,
-    PhysicalRegister, VirtualRegister
+    PhysicalRegister, VirtualRegister,
+    SpecialRegister,
 )
+
+class SpecialRegisterPattern(PhysicalRegisterPattern):
+    REG_PATTERN = "\$([\w\d_]+)"
+    REG_LEXEM = SpecialRegisterLexem
+
+    @staticmethod
+    def get_unique_reg_obj(arch, tag):
+        return arch.get_special_reg_object(tag)
 
 LOAD_PATTERN = SequentialPattern(
     [OpcodePattern("opc"), RegisterPattern_Std("dst"), AddressPattern_Std("addr")],
@@ -20,10 +34,92 @@ LOAD_PATTERN = SequentialPattern(
         Instruction(result["opc"],
                     use_list=(result["addr"].base + result["addr"].offset),
                     def_list=result["dst"],
-                    dump_pattern=lambda color_map, use_list, def_list: "ld {} = {}[{}]".format(def_list[0].instanciate(color_map), use_list[1].instanciate(color_map), use_list[0].instanciate(color_map)))
-)
+                    dump_pattern=lambda color_map, use_list, def_list:
+                        "{} {} = {}[{}]".format(
+                            result["opc"],
+                            def_list[0].instanciate(color_map),
+                            use_list[1].instanciate(color_map),
+                            use_list[0].instanciate(color_map))))
+STORE_PATTERN = SequentialPattern(
+    [OpcodePattern("opc"), AddressPattern_Std("dst_addr"), RegisterPattern_Std("src")],
+    lambda result:
+        Instruction(result["opc"],
+                    use_list=result["src"],
+                    def_list=(result["dst_addr"].base + result["dst_addr"].offset),
+                    dump_pattern=lambda color_map, use_list, def_list:
+                        "{} {}[{}] = {}".format(
+                            result["opc"],
+                            def_list[1].instanciate(color_map),
+                            def_list[0].instanciate(color_map),
+                            use_list[0].instanciate(color_map)
+                            )))
+STORE_DUAL_PATTERN = SequentialPattern(
+    [OpcodePattern("opc"), AddressPattern_Std("dst_addr"), RegisterPattern_DualStd("src")],
+    lambda result:
+        Instruction(result["opc"],
+                    use_list=result["src"],
+                    def_list=(result["dst_addr"].base + result["dst_addr"].offset),
+                    dump_pattern=lambda color_map, use_list, def_list:
+                        "{} {}[{}] = {}".format(
+                            result["opc"],
+                            def_list[1].instanciate(color_map),
+                            def_list[0].instanciate(color_map),
+                            use_list[0].instanciate(color_map)
+                            )))
 STD_1OP_PATTERN = SequentialPattern(
         [OpcodePattern("opc"), RegisterPattern_Std("dst"), RegisterPattern_Std("op")],
+        lambda result:
+            Instruction(result["opc"],
+                        use_list=(result["op"]),
+                        def_list=result["dst"],
+                        dump_pattern=lambda color_map, use_list, def_list: "{} {} = {}, {}".format(result["opc"], def_list[0].instanciate(color_map), use_list[0].instanciate(color_map)))
+    )
+CALL_1OP_PATTERN = SequentialPattern(
+        [OpcodePattern("opc"), RegisterPattern_Std("op")],
+        lambda result:
+            Instruction(result["opc"],
+                        use_list=(result["op"]),
+                        dump_pattern=lambda color_map, use_list, def_list: "{} {} = {}, {}".format(result["opc"], def_list[0].instanciate(color_map), use_list[0].instanciate(color_map)))
+    )
+STD_IMM_PATTERN = SequentialPattern(
+        [OpcodePattern("opc"), RegisterPattern_Std("dst"), ImmediatePattern("op")],
+        lambda result:
+            Instruction(result["opc"],
+                        def_list=result["dst"],
+                        dump_pattern=lambda color_map, use_list, def_list: "{} {} = {}, {}".format(result["opc"], def_list[0].instanciate(color_map), use_list[0].instanciate(color_map)))
+    )
+STD_1OP_1IMM_PATTERN = SequentialPattern(
+        [OpcodePattern("opc"), RegisterPattern_Std("dst"), RegisterPattern_Std("op"), ImmediatePattern("imm")],
+        lambda result:
+            Instruction(result["opc"],
+                        use_list=(result["op"]),
+                        def_list=result["dst"],
+                        dump_pattern=lambda color_map, use_list, def_list:
+                            "{} {} = {}, {}".format(result["opc"],
+                                                    def_list[0].instanciate(color_map),
+                                                    use_list[0].instanciate(color_map),
+                                                    result["imm"])))
+STD_1OP_2IMM_PATTERN = SequentialPattern(
+        [OpcodePattern("opc"), RegisterPattern_Std("dst"), RegisterPattern_Std("op"), ImmediatePattern("imm0"), ImmediatePattern("imm1")],
+        lambda result:
+            Instruction(result["opc"],
+                        use_list=(result["op"]),
+                        def_list=result["dst"],
+                        dump_pattern=lambda color_map, use_list, def_list:
+                            "{} {} = {}, {}".format(result["opc"],
+                                                    def_list[0].instanciate(color_map),
+                                                    use_list[0].instanciate(color_map),
+                                                    result["imm"])))
+STD_1OP_SPEC2PHY_PATTERN = SequentialPattern(
+        [OpcodePattern("opc"), RegisterPattern_Std("dst"), SpecialRegisterPattern("op")],
+        lambda result:
+            Instruction(result["opc"],
+                        use_list=(result["op"]),
+                        def_list=result["dst"],
+                        dump_pattern=lambda color_map, use_list, def_list: "{} {} = {}, {}".format(result["opc"], def_list[0].instanciate(color_map), use_list[0].instanciate(color_map)))
+    )
+STD_1OP_PHY2SPEC_PATTERN = SequentialPattern(
+        [OpcodePattern("opc"), SpecialRegisterPattern("dst"), RegisterPattern_Std("op")],
         lambda result:
             Instruction(result["opc"],
                         use_list=(result["op"]),
@@ -41,7 +137,7 @@ STD_2OP_PATTERN = SequentialPattern(
 DUAL_2OP_PATTERN = SequentialPattern(
         [OpcodePattern("opc"), RegisterPattern_DualStd("dst"), RegisterPattern_Std("lhs"), RegisterPattern_Std("rhs")],
         lambda result: Instruction(result["opc"], use_list=(result["lhs"] + result["rhs"]), def_list=result["dst"], 
-                                   dump_pattern=lambda color_map, use_list, def_list: "addd {} = {}, {}".format(instanciate_dual_reg(color_map, Register.Std, def_list[0:2]), use_list[0].instanciate(color_map), use_list[1].instanciate(color_map)))
+                                   dump_pattern=lambda color_map, use_list, def_list: "{} {} = {}, {}".format(result["opc"], instanciate_dual_reg(color_map, Register.Std, def_list[0:2]), use_list[0].instanciate(color_map), use_list[1].instanciate(color_map)))
     )
 MOVEFO_PATTERN = SequentialPattern(
         [OpcodePattern("opc"), RegisterPattern_Acc("dst"), RegisterPattern_Std("lhs"), RegisterPattern_Std("rhs")],
@@ -64,21 +160,49 @@ GOTO_PATTERN = SequentialPattern(
 NOP_PATTERN = SequentialPattern([OpcodePattern("opc")], lambda result: Instruction(result["opc"]))
 
 KV3_INSN_PATTERN_MATCH = {
-    "rswap": STD_1OP_PATTERN,
+    # TODO/FIXME, rswap should consider both src/dst as used and defined
+    "rswap": STD_1OP_SPEC2PHY_PATTERN,
+    "get": STD_1OP_SPEC2PHY_PATTERN,
+    "wfxl": STD_1OP_PHY2SPEC_PATTERN,
+    "set": STD_1OP_PHY2SPEC_PATTERN,
+
+    "icall": CALL_1OP_PATTERN,
+
+    "make": STD_IMM_PATTERN,
 
     "goto": GOTO_PATTERN,
     "ld":   LOAD_PATTERN,
 
-    "add":  STD_2OP_PATTERN,
-    "sbf":  STD_2OP_PATTERN,
+    "sd":   STORE_PATTERN,
+    "sq":   STORE_DUAL_PATTERN,
 
-    "addd":  DUAL_2OP_PATTERN,
-    "sbfd":  DUAL_2OP_PATTERN,
+    "addw":  STD_2OP_PATTERN,
+    "sbfw":  STD_2OP_PATTERN,
+
+    "addd":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "sbfd":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+
+    "srld":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "slld":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "srad":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+
+    "sbmm8":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+
+    "insf":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_2IMM_PATTERN]),
+    "extfz":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_2IMM_PATTERN]),
+
+    "notd": STD_1OP_PATTERN,
+    "copyd": STD_1OP_PATTERN,
+
+    "andd":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "ord":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "xord":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
 
     "movefo": MOVEFO_PATTERN,
     "movefa": MOVEFA_PATTERN,
 
     "nop": NOP_PATTERN,
+    "rfe": NOP_PATTERN,
 }
 
 class KV3Architecture(Architecture):
@@ -86,7 +210,8 @@ class KV3Architecture(Architecture):
         Architecture.__init__(self,
             set([
                 RegFileDescription(Register.Std, std_reg_num, PhysicalRegister, VirtualRegister),
-                RegFileDescription(Register.Acc, acc_reg_num, PhysicalRegister, VirtualRegister)
+                RegFileDescription(Register.Acc, acc_reg_num, PhysicalRegister, VirtualRegister),
+                RegFileDescription(Register.Special, 0, PhysicalRegister, SpecialRegister)
             ]),
             KV3_INSN_PATTERN_MATCH
         )
