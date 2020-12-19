@@ -363,6 +363,19 @@ class SequentialPattern:
         return self.result_builder(match_result), lexem_list
 
 
+class DisjonctivePattern:
+    """ match one of the element in the list """
+    def __init__(self, elt_pattern_list):
+        self.elt_pattern_list = elt_pattern_list
+
+    def match(self, arch, lexem_list):
+        for pattern in self.elt_pattern_list:
+            result = pattern.match(arch, lexem_list)
+            if not result is None:
+                # should be tuple Result, lexem_list
+                return result
+        return None
+
 
 class AsmParser:
     def __init__(self, arch, program):
