@@ -460,7 +460,7 @@ class AsmParser:
                     succ.add_predecessor(self.program.current_bb)
                 # in objdump file, a instruction line may be ended by a bundle separator
                 #   goto label;;
-                if isinstance(lexem_list[-1], BundleSeparatorLexem):
+                if len(lexem_list) and isinstance(lexem_list[-1], BundleSeparatorLexem):
                     self.program.add_bundle(self.ongoing_bundle)
                     self.ongoing_bundle = Bundle()
 
