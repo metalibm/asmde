@@ -24,10 +24,18 @@ class Register:
         name = "Acc"
         prefix = "$"
         reg_prefix = "a"
+    class Special(RegClass):
+        name = "Special"
+        prefix = "$"
+        reg_prefix = ""
 
     def is_virtual(self):
         """ predicate indicating if register is virtual (or physical) """
-        raise NotImplementedError
+        return False
+    def is_special(self):
+        """ Predicate indicating if register belongs to a special/system
+            register file """
+        return False
 
 
 class MultiArchRegister:
@@ -54,6 +62,21 @@ class PhysicalRegister(Register):
 
     def is_virtual(self):
         return False
+
+    def instanciate(self, color_map):
+        return self
+
+class SpecialRegister(Register):
+    """ Physical register """
+    def __init__(self, tag, reg_class=None):
+        self.tag = tag
+        self.reg_class = reg_class
+
+    def __repr__(self):
+        return self.reg_class.get_single_phy_reg_repr(self)
+
+    def is_special(self):
+        return True
 
     def instanciate(self, color_map):
         return self
@@ -187,6 +210,16 @@ class RegFile:
     def get_max_phys_register_index(self):
         return self.description.num_phys_reg - 1
 
+class SpecialRegFile(RegFile):
+    def __init__(self, description):
+        self.description = description
+        self.special_pool = {}
+    def get_special_reg_object(self, tag, reg_constraint=no_constraint):
+        if not tag in self.special_pool:
+            self.special_pool[tag] = PhysicalRegister(tag, self.description.reg_class, constraint=reg_constraint)
+        return self.special_pool[tag]
+        
+
 class Architecture:
     """ Base class for architecture description """
     def __init__(self, reg_file_description_set, insn_patterns):
@@ -199,6 +232,10 @@ class Architecture:
 
     def get_unique_phys_reg_object(self, index, reg_class):
         return self.reg_pool[reg_class].get_unique_phys_reg_object(index)
+
+    def get_special_reg_object(self, tag, reg_class):
+        assert reg_class is Register.Special
+        return self.reg_pool[reg_class].get_special_reg_object(tag)
 
     def get_unique_virt_reg_object(self, var_name, reg_class, reg_constraint=no_constraint):
         return self.reg_pool[reg_class].get_unique_virt_reg_object(var_name, reg_constraint=reg_constraint)
