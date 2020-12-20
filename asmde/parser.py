@@ -438,6 +438,14 @@ class AsmParser:
             self.parse_macro(lexem_list[1:], dbg_object)
         elif isinstance(head, CommentHeadLexem):
             pass
+        elif isinstance(head, OperatorLexem) and head.value == "<":
+            # label
+            label = head.value
+            while not isinstance(lexem_list[0], OperatorLexem) or lexem_list[0].value != ">":
+                label = label + lexem_list.pop(0).value
+            assert isinstance(lexem_list[1], LabelEndLexem)
+            self.program.add_label(label)
+
         elif isinstance(head, Lexem):
             if head.value == "Disassembly":
                 # skipping "Dissasembly of section ..."
