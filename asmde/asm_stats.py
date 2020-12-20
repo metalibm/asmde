@@ -17,12 +17,15 @@ class ProgramStatistics:
         for bb in program.bb_list:
             for bundle in bb.bundle_list:
                 for insn in bundle.insn_list:
-                    self.opc_map[insn.insn_object] += 1
+                    insn_tag = insn.insn_object
+                    if not insn.match_pattern is None:
+                        insn_tag = insn_tag + "-" + insn.match_pattern
+                    self.opc_map[insn_tag] += 1
 
     def dump(self):
         print("Program statistics")
         for opc in self.opc_map:
-            print("{opc:10} {count}".format(opc=opc, count=self.opc_map[opc]))
+            print("{count:5} {opc:15}".format(opc=opc, count=self.opc_map[opc]))
 
 
 if __name__ == "__main__":

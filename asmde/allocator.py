@@ -150,7 +150,7 @@ class DebugObject:
         return "line {}".format(self.src_line)
 
 class Instruction:
-    def __init__(self, insn_object, def_list=None, use_list=None, dbg_object=None, dump_pattern=None, is_jump=False):
+    def __init__(self, insn_object, def_list=None, use_list=None, dbg_object=None, dump_pattern=None, is_jump=False, match_pattern=None):
         self.insn_object = insn_object
         self.def_list = [] if def_list is None else def_list
         self.use_list = [] if use_list is None else use_list
@@ -158,6 +158,9 @@ class Instruction:
         # function (use_list, def_list) -> instruction string
         self.dump_pattern = dump_pattern
         self.is_jump = is_jump
+        # information on pattern used to match the instruction in the input
+        # (if any)
+        self.match_pattern = match_pattern
 
     def __repr__(self):
         return self.insn_object
