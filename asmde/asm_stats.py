@@ -31,6 +31,7 @@ if __name__ == "__main__":
     parser.add_argument("--lexer-verbose", action="store_const", default=False, const=True, help="enable lexer verbosity")
 
     parser.add_argument("--output", action="store", default=None, help="select output file (default stdout)")
+    parser.add_argument("--allow-error", action="store", default=0, type=int, help="set the number of accepted errors before stopping")
     parser.add_argument("--input", action="store", help="select input file")
     parser.add_argument("--objdump", action="store_const", default=False, const=True, help="indicate that assembly input is in objdump form")
     parser.add_argument("--arch", action="store", default=DummyArchitecture(), type=parse_architecture, help="select target architecture")
@@ -39,6 +40,8 @@ if __name__ == "__main__":
 
     program = Program()
     asm_parser = AsmParser(args.arch, program)
+
+    error_count = 0
 
     print("parsing input program")
     with open(args.input, "r") as input_stream:
@@ -57,7 +60,9 @@ if __name__ == "__main__":
             except:
                 print("error @line {}, {}".format(line_no, line))
                 print(lexem_list)
-                raise
+                error_count += 1
+                if error_count > args.allow_error:
+                    raise
         # finish program (e.g. connecting last BB to sink)
         asm_parser.program.end_program()
         print(asm_parser.program.bb_list)
