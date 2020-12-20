@@ -88,6 +88,10 @@ class SpecialRegister(Register):
 def no_constraint(index):
     return True
 
+def modulo_indexed_register(modulo, value):
+    """ generate a predicate such a register <index>
+        must match <index> % modulo == value """
+    return lambda index: (index % modulo) == value
 def odd_indexed_register(index):
     return (index % 2) == 1
 def even_indexed_register(index):
