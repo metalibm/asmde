@@ -316,8 +316,9 @@ class AddressPattern_Std(Pattern):
         return AddrValue(base=base_value, offset=offset_value), lexem_list
 
 class OpcodePattern(Pattern):
-    def __init__(self, tag="opcode"):
+    def __init__(self, tag="opcode", match_predicate=False):
         Pattern.__init__(self, tag)
+        self.match_predicate = match_predicate
 
     def parse(self, arch, lexem_list):
         if len(lexem_list) == 0:
@@ -326,7 +327,14 @@ class OpcodePattern(Pattern):
             head, lexem_list = lexem_list[0], lexem_list[1:]
             if (not isinstance(head, Lexem)):
                 return None
-            return head.value, lexem_list
+            opcode = head.value
+            while self.match_predicate and isinstance(lexem_list[0], OperatorLexem) and lexem_list[0].value == ".":
+                assert isinstance(lexem_list[1], Lexem)
+                predicate = lexem_list[1].value
+                opcode = "{}.{}".format(opcode, predicate)
+                lexem_list = lexem_list[2:]
+            
+            return opcode, lexem_list
 
 class LabelPattern(Pattern):
     def __init__(self, tag="label"):
