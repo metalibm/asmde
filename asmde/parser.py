@@ -44,8 +44,8 @@ def MetaPopOperatorPredicate(op_value):
     def predicate(lexem_list):
         lexem = lexem_list[0]
         if not isinstance(lexem, OperatorLexem) or lexem.value != op_value:
-            raise Exception(" expecting operator {}, got {}".format(op_value, lexem)) 
-            return False
+            # raise Exception(" expecting operator {}, got {}".format(op_value, lexem)) 
+            return None
         return lexem_list[1:]
     return predicate
 
@@ -171,6 +171,8 @@ class PhysicalRegisterPattern(Pattern):
             #elif re.fullmatch(ACC_REG_PATTERN, reg_lexem.value):
             #    register_list = [arch.get_unique_phys_reg_object(index, PhysicalRegister.Acc) for index in index_range]
             else:
+                return None
+                print(PRP_Class, lexem_list)
                 raise NotImplementedError
 
             return register_list, lexem_list[1:]
@@ -309,10 +311,16 @@ class AddressPattern_Std(Pattern):
         if offset_match is None: return None
         offset_value, lexem_list = offset_match
         lexem_list = MetaPopOperatorPredicate("[")(lexem_list)
+        if lexem_list is None:
+            # match failed
+            return None
         base_match = RegisterPattern_Std.parse(arch, lexem_list)
         if base_match is None: return None
         base_value, lexem_list = base_match
         lexem_list = MetaPopOperatorPredicate("]")(lexem_list)
+        if lexem_list is None:
+            # match failed
+            return None
         return AddrValue(base=base_value, offset=offset_value), lexem_list
 
 class OpcodePattern(Pattern):
@@ -361,7 +369,6 @@ class SequentialPattern:
         for pattern in self.elt_pattern_list:
             result = pattern.parse(arch, lexem_list)
             if result is None:
-                print("could not match {} with {}".format(lexem_list, pattern))
                 return None
             # retieving parse result and updating remaining list of lexems
             value, lexem_list = result
@@ -458,7 +465,7 @@ class AsmParser:
             if head.value == "Disassembly":
                 # skipping "Dissasembly of section ..."
                 pass
-            elif isinstance(lexem_list[1], LabelEndLexem):
+            elif len(lexem_list) > 1 and isinstance(lexem_list[1], LabelEndLexem):
                 if len(self.ongoing_bundle) != 0:
                     print("Error: label can not be inserted in the middle of a bundle @ {}".format(dbg_object))
                     sys.exit(1)
