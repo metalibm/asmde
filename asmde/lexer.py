@@ -2,9 +2,7 @@
 
 import re
 
-class Lexem:
-    PATTERN = "[\w\d_]+"
-
+class ParentLexem:
     def __init__(self, value):
         self.value = value
 
@@ -15,46 +13,56 @@ class Lexem:
     def __repr__(self):
         return "{}({})".format(self.__class__.__name__, self.value)
 
-class Separator(Lexem):
+class Lexem(ParentLexem):
+    PATTERN = "[\w\d_]+"
+
+
+class Separator(ParentLexem):
     pass
 
-class RegisterLexem(Lexem):
+class RegisterLexem(ParentLexem):
     PATTERN = "\$([ar][0-9]+){1,4}"
 
     def __repr__(self):
         return "RegisterLexem({})".format(self.value)
 
-class SpecialRegisterLexem(Lexem):
+class SpecialRegisterLexem(ParentLexem):
     PATTERN = "\$([\w\d]+)"
 
     def __repr__(self):
         return "SpecialRegisterLexem({})".format(self.value)
 
-class ImmediateLexem(Lexem):
+class ImmediateLexem(ParentLexem):
     PATTERN = "([+-]|)[0-9]+"
 
-class HexImmediateLexem(Lexem):
+class HexImmediateLexem(ParentLexem):
     PATTERN = "(\(|)([+-]|)0x[0-9a-fA-F]+(\)|)"
 
-class OperatorLexem(Lexem):
+class OperatorLexem(ParentLexem):
     PATTERN = "[()\[\]\.<>]"
 
-class LabelEndLexem(Lexem):
+class LabelEndLexem(ParentLexem):
     PATTERN = ":"
 
-class BundleSeparatorLexem(Lexem):
+class BundleSeparatorLexem(ParentLexem):
     PATTERN = ";;"
 
 
-class MacroLexem(Lexem):
+class MacroLexem(ParentLexem):
     PATTERN = "\/\/#"
 
-class CommentHeadLexem(Lexem):
+class CommentHeadLexem(ParentLexem):
     PATTERN = "\/\/(?!#)"
+
+class ObjdumpMacro(ParentLexem):
+    PATTERN = "([\.]{3}|\*\*\*)"
+
+class ObjdumpLabel(ParentLexem):
+    PATTERN = "<[\w\d._+-]+>"
 
 # extended regular expression for seperator, including
 # separators that will be included as valid lexems
-SEP_PATTERN = "([ \t,=\.])+"
+SEP_PATTERN = "([ \t,=\?])+"
 
 # DUMMY SEPARATOR (to be discarded during lexing)
 DUMMY_SEP_PATTERN = "[ \t,=]+"
@@ -63,8 +71,9 @@ def generate_line_lexems(s):
     """ generate the list of lexems found in line @p s """
     lexem_list = []
     for sub_word in re.split(SEP_PATTERN, s):
+        if sub_word in ['', ' ', '\t']: continue
         lexem_match = None
-        for lexem_class in [CommentHeadLexem, LabelEndLexem, MacroLexem, HexImmediateLexem, ImmediateLexem, RegisterLexem, OperatorLexem, BundleSeparatorLexem, Lexem, SpecialRegisterLexem]:
+        for lexem_class in [ObjdumpMacro, ObjdumpLabel, CommentHeadLexem, LabelEndLexem, MacroLexem, HexImmediateLexem, ImmediateLexem, RegisterLexem, OperatorLexem, BundleSeparatorLexem, Lexem, SpecialRegisterLexem]:
             lexem_match = lexem_class.match(sub_word)
             if lexem_match is None:
                 continue
@@ -77,6 +86,8 @@ def generate_line_lexems(s):
                 if remainder != "":
                     lexem_list = lexem_list + generate_line_lexems(remainder)
                 break
+        if lexem_match is None:
+            print("could not match lexically '{}' ".format(sub_word))
 
     return lexem_list
 

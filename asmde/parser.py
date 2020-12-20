@@ -12,6 +12,8 @@ from asmde.lexer import (
     ImmediateLexem, OperatorLexem,
     BundleSeparatorLexem, MacroLexem,
     HexImmediateLexem,
+    ObjdumpLabel,
+    ObjdumpMacro
 )
 
 from asmde.allocator import (
@@ -353,8 +355,19 @@ class LabelPattern(Pattern):
             return None
         else:
             head, lexem_list = lexem_list[0], lexem_list[1:]
-            if (not isinstance(head, Lexem)):
+            if (not isinstance(head, (Lexem, ObjdumpLabel))) and (isinstance(head, OperatorLexem) and head.value != "<"):
                 return None
+            if isinstance(head, OperatorLexem) and head.value == "<":
+                label = head.value
+                head, lexem_list = lexem_list[0], lexem_list[1:]
+                while not isinstance(head, OperatorLexem) or head.value != ">":
+                    label = label + head.value
+                    if not len(lexem_list):
+                        # no match
+                        return None
+                    head, lexem_list = lexem_list[0], lexem_list[1:]
+                # adding final ">"
+                label = label + head.value
             return head.value, lexem_list
 
 
@@ -453,6 +466,8 @@ class AsmParser:
             self.parse_macro(lexem_list[1:], dbg_object)
         elif isinstance(head, CommentHeadLexem):
             pass
+        elif isinstance(head, ObjdumpMacro):
+            pass
         elif isinstance(head, OperatorLexem) and head.value == "<":
             # label
             label = head.value
@@ -460,6 +475,14 @@ class AsmParser:
                 label = label + lexem_list.pop(0).value
             assert isinstance(lexem_list[1], LabelEndLexem)
             self.program.add_label(label)
+
+        elif isinstance(head, ObjdumpLabel):
+            assert isinstance(lexem_list[1], LabelEndLexem)
+            if len(lexem_list) > 1 and isinstance(lexem_list[1], LabelEndLexem):
+                if len(self.ongoing_bundle) != 0:
+                    print("Error: label can not be inserted in the middle of a bundle @ {}".format(dbg_object))
+                    sys.exit(1)
+                self.program.add_label(head.value)
 
         elif isinstance(head, Lexem):
             if head.value == "Disassembly":
@@ -482,10 +505,7 @@ class AsmParser:
                         insn_object, lexem_list = insn_match
 
                 else:
-                    if lexem_list[0].value == "invalid" and lexem_list[1].value == "opcode":
-                        print("invalid opcode")
-                        return
-                    print("unable to parse {} @ {}".format(lexem_list, dbg_object))
+                    print("unable to parse {} @ {}, head={}".format(lexem_list, dbg_object, head))
                     raise NotImplementedError
                 # adding meta information
                 insn_object.dbg_object = dbg_object
@@ -505,6 +525,7 @@ class AsmParser:
                     self.ongoing_bundle = Bundle()
 
         else:
+            print(head, lexem_list, dbg_object)
             raise NotImplementedError
 
     def parse_macro(self, lexem_list, dbg_object):
