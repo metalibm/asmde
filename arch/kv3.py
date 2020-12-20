@@ -329,7 +329,7 @@ STD_2OP_DUAL_RESULT_PATTERN = SequentialPattern(
 
 
 DUAL_2OP_PATTERN = SequentialPattern(
-        [OpcodePattern("opc"), RegisterPattern_DualStd("dst"), RegisterPattern_Std("lhs"), RegisterPattern_Std("rhs")],
+        [OpcodePattern("opc"), RegisterPattern_DualStd("dst"), RegisterPattern_DualStd("lhs"), RegisterPattern_DualStd("rhs")],
         lambda result: Instruction(result["opc"], use_list=(result["lhs"] + result["rhs"]), def_list=result["dst"], 
                                    dump_pattern=lambda color_map, use_list, def_list: "{} {} = {}, {}".format(result["opc"], instanciate_dual_reg(color_map, Register.Std, def_list[0:2]), use_list[0].instanciate(color_map), use_list[1].instanciate(color_map)))
     )
@@ -466,6 +466,11 @@ KV3_INSN_PATTERN_MATCH = {
     "fnegwp": STD_1OP_PATTERN,
     "fnegd": STD_1OP_PATTERN,
 
+    "fmaxw": STD_2OP_PATTERN,
+    "fminw": STD_2OP_PATTERN,
+    "fmaxwp": STD_2OP_PATTERN,
+    "fminwp": STD_2OP_PATTERN,
+
     "fsbfw": STD_2OP_PATTERN,
     "faddw": STD_2OP_PATTERN,
     "fmulw": STD_2OP_PATTERN,
@@ -486,6 +491,13 @@ KV3_INSN_PATTERN_MATCH = {
 
     "ffmawp": STD_2OP_ACC_PATTERN,
     "ffmswp": STD_2OP_ACC_PATTERN,
+
+    "fmulwq": DUAL_2OP_PATTERN,
+    "faddwq": DUAL_2OP_PATTERN,
+    "fsbfwq": DUAL_2OP_PATTERN,
+
+    "frecw": STD_1OP_PATTERN,
+    "frecwp": STD_1OP_PATTERN,
 
     "fcompw": DisjonctivePattern([COMP_OP_PATTERN, COMP_IMM_PATTERN]),
     "fcompd": DisjonctivePattern([COMP_OP_PATTERN, COMP_IMM_PATTERN]),
@@ -557,6 +569,7 @@ KV3_INSN_PATTERN_MATCH = {
 
     "insf":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_2IMM_PATTERN]),
     "extfz":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_2IMM_PATTERN]),
+    "extfs":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_2IMM_PATTERN]),
 
     "ctzd": STD_1OP_PATTERN,
     "ctzw": STD_1OP_PATTERN,
