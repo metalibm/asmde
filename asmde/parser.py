@@ -482,6 +482,9 @@ class AsmParser:
                         insn_object, lexem_list = insn_match
 
                 else:
+                    if lexem_list[0].value == "invalid" and lexem_list[1].value == "opcode":
+                        print("invalid opcode")
+                        return
                     print("unable to parse {} @ {}".format(lexem_list, dbg_object))
                     raise NotImplementedError
                 # adding meta information
