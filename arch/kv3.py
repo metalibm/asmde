@@ -136,31 +136,39 @@ CMOVE_IMM_PATTERN = SequentialPattern(
                             use_list[0].instanciate(color_map),
                             def_list[0].instanciate(color_map),
                             result["imm"])))
-LOAD_PATTERN = SequentialPattern(
-    [OpcodePattern("opc", match_predicate=True), RegisterPattern_Std("dst"), AddressPattern_Std("addr")],
-    lambda result:
-        Instruction(result["opc"],
-                    use_list=(result["addr"].base + result["addr"].offset),
-                    def_list=result["dst"],
-                    dump_pattern=lambda color_map, use_list, def_list:
-                        "{} {} = {}[{}]".format(
-                            result["opc"],
-                            def_list[0].instanciate(color_map),
-                            use_list[1].instanciate(color_map),
-                            use_list[0].instanciate(color_map))))
+def LOAD_PATTERN_TEMPLATE(DstRegClass=RegisterPattern_Std):
+    return SequentialPattern(
+        [OpcodePattern("opc", match_predicate=True), DstRegClass("dst"), AddressPattern_Std("addr")],
+        lambda result:
+            Instruction(result["opc"],
+                        use_list=(result["addr"].base + result["addr"].offset),
+                        def_list=result["dst"],
+                        dump_pattern=lambda color_map, use_list, def_list:
+                            "{} {} = {}[{}]".format(
+                                result["opc"],
+                                def_list[0].instanciate(color_map),
+                                use_list[1].instanciate(color_map),
+                                use_list[0].instanciate(color_map))))
 
-LOAD_ACC_PATTERN = SequentialPattern(
-    [OpcodePattern("opc", match_predicate=True), RegisterPattern_Acc("dst"), AddressPattern_Std("addr")],
-    lambda result:
-        Instruction(result["opc"],
-                    use_list=(result["addr"].base + result["addr"].offset),
-                    def_list=result["dst"],
-                    dump_pattern=lambda color_map, use_list, def_list:
-                        "{} {} = {}[{}]".format(
-                            result["opc"],
-                            def_list[0].instanciate(color_map),
-                            use_list[1].instanciate(color_map),
-                            use_list[0].instanciate(color_map))))
+LOAD_PATTERN = LOAD_PATTERN_TEMPLATE(RegisterPattern_Std)
+LOAD_ACC_PATTERN = LOAD_PATTERN_TEMPLATE(RegisterPattern_Acc)
+LOAD_DUAL_PATTERN = LOAD_PATTERN_TEMPLATE(RegisterPattern_DualStd)
+LOAD_QUAD_PATTERN = LOAD_PATTERN_TEMPLATE(RegisterPattern_QuadStd)
+
+def LOAD_COND_PATTERN_TEMPLATE(DstRegClass=RegisterPattern_Std):
+    return SequentialPattern(
+        [OpcodePattern("opc", match_predicate=True), RegisterPattern_Std("cond"), DstRegClass("dst"), AddressPattern_Std("addr")],
+        lambda result:
+            Instruction(result["opc"],
+                        use_list=(result["cond"] + result["addr"].base + result["addr"].offset),
+                        def_list=result["dst"],
+                        dump_pattern=lambda color_map, use_list, def_list:
+                            "{} {} ? {} = {}[{}]".format(
+                                result["opc"],
+                                use_list[0].instanciate(color_map),
+                                def_list[0].instanciate(color_map),
+                                use_list[2].instanciate(color_map),
+                                use_list[1].instanciate(color_map))))
 
 DINVALL_PATTERN = SequentialPattern(
     [OpcodePattern("opc", match_predicate=True), AddressPattern_Std("addr")],
@@ -173,31 +181,7 @@ DINVALL_PATTERN = SequentialPattern(
                             use_list[1].instanciate(color_map),
                             use_list[0].instanciate(color_map))))
 
-LOAD_DUAL_PATTERN = SequentialPattern(
-    [OpcodePattern("opc", match_predicate=True), RegisterPattern_DualStd("dst"), AddressPattern_Std("addr")],
-    lambda result:
-        Instruction(result["opc"],
-                    use_list=(result["addr"].base + result["addr"].offset),
-                    def_list=result["dst"],
-                    dump_pattern=lambda color_map, use_list, def_list:
-                        "{} {} = {}[{}]".format(
-                            result["opc"],
-                            def_list[0].instanciate(color_map),
-                            use_list[1].instanciate(color_map),
-                            use_list[0].instanciate(color_map))))
 
-LOAD_QUAD_PATTERN = SequentialPattern(
-    [OpcodePattern("opc", match_predicate=True), RegisterPattern_QuadStd("dst"), AddressPattern_Std("addr")],
-    lambda result:
-        Instruction(result["opc"],
-                    use_list=(result["addr"].base + result["addr"].offset),
-                    def_list=result["dst"],
-                    dump_pattern=lambda color_map, use_list, def_list:
-                        "{} {} = {}[{}]".format(
-                            result["opc"],
-                            def_list[0].instanciate(color_map),
-                            use_list[1].instanciate(color_map),
-                            use_list[0].instanciate(color_map))))
 
 STORE_PATTERN = SequentialPattern(
     [OpcodePattern("opc", match_predicate=True), AddressPattern_Std("dst_addr"), RegisterPattern_Std("src")],
@@ -418,15 +402,15 @@ KV3_INSN_PATTERN_MATCH = {
     "cb": BRANCH_PATTERN,
     "loopdo": BRANCH_PATTERN,
 
-    "lbz":   LOAD_PATTERN,
-    "lbs":   LOAD_PATTERN,
-    "lhz":   LOAD_PATTERN,
-    "lhs":   LOAD_PATTERN,
-    "lwz":   LOAD_PATTERN,
-    "lws":   LOAD_PATTERN,
-    "ld":   LOAD_PATTERN,
-    "lq":   LOAD_DUAL_PATTERN,
-    "lo":   LOAD_QUAD_PATTERN,
+    "lbz":   DisjonctivePattern([LOAD_PATTERN, LOAD_COND_PATTERN_TEMPLATE(RegisterPattern_Std)]),
+    "lbs":   DisjonctivePattern([LOAD_PATTERN, LOAD_COND_PATTERN_TEMPLATE(RegisterPattern_Std)]),
+    "lhz":   DisjonctivePattern([LOAD_PATTERN, LOAD_COND_PATTERN_TEMPLATE(RegisterPattern_Std)]),
+    "lhs":   DisjonctivePattern([LOAD_PATTERN, LOAD_COND_PATTERN_TEMPLATE(RegisterPattern_Std)]),
+    "lwz":   DisjonctivePattern([LOAD_PATTERN, LOAD_COND_PATTERN_TEMPLATE(RegisterPattern_Std)]),
+    "lws":   DisjonctivePattern([LOAD_PATTERN, LOAD_COND_PATTERN_TEMPLATE(RegisterPattern_Std)]),
+    "ld":    DisjonctivePattern([LOAD_PATTERN, LOAD_COND_PATTERN_TEMPLATE(RegisterPattern_Std)]),
+    "lq":   DisjonctivePattern([LOAD_DUAL_PATTERN, LOAD_COND_PATTERN_TEMPLATE(RegisterPattern_DualStd)]),
+    "lo":   DisjonctivePattern([LOAD_QUAD_PATTERN, LOAD_COND_PATTERN_TEMPLATE(RegisterPattern_QuadStd)]),
 
     "sb":   STORE_PATTERN,
     "sh":   STORE_PATTERN,
