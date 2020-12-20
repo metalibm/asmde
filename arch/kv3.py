@@ -89,6 +89,7 @@ COMP_IMM_PATTERN = SequentialPattern(
     [OpcodePattern("opc"), PredicatePattern("pred"), RegisterPattern_Std("dst"), RegisterPattern_Std("lhs"), ImmediatePattern("imm")],
     lambda result:
         Instruction(result["opc"] + "." + result["pred"].specifier,
+                    match_pattern="imm",
                     use_list=(result["lhs"]),
                     def_list=result["dst"],
                     dump_pattern=lambda color_map, use_list, def_list:
@@ -128,6 +129,7 @@ CMOVE_IMM_PATTERN = SequentialPattern(
     [OpcodePattern("opc"), PredicatePattern("pred"), RegisterPattern_Std("cond"), RegisterPattern_Std("dst"), ImmediatePattern("imm")],
     lambda result:
         Instruction(result["opc"] + "." + result["pred"].specifier,
+                    match_pattern="imm",
                     use_list=(result["cond"]),
                     def_list=result["dst"],
                     dump_pattern=lambda color_map, use_list, def_list:
@@ -243,12 +245,14 @@ CALL_IMM_PATTERN = SequentialPattern(
         [OpcodePattern("opc"), ImmediatePattern("imm")],
         lambda result:
             Instruction(result["opc"],
+                        match_pattern="imm",
                         dump_pattern=lambda color_map, use_list, def_list: "{} {}".format(result["opc"], result["imm"])))
     
 STD_IMM_PATTERN = SequentialPattern(
         [OpcodePattern("opc"), RegisterPattern_Std("dst"), ImmediatePattern("op")],
         lambda result:
             Instruction(result["opc"],
+                        match_pattern="imm",
                         def_list=result["dst"],
                         dump_pattern=lambda color_map, use_list, def_list: "{} {} = {}, {}".format(result["opc"], def_list[0].instanciate(color_map), use_list[0].instanciate(color_map)))
     )
@@ -256,6 +260,7 @@ STD_1OP_1IMM_PATTERN = SequentialPattern(
         [OpcodePattern("opc"), RegisterPattern_Std("dst"), RegisterPattern_Std("op"), ImmediatePattern("imm")],
         lambda result:
             Instruction(result["opc"],
+                        match_pattern="imm",
                         use_list=(result["op"]),
                         def_list=result["dst"],
                         dump_pattern=lambda color_map, use_list, def_list:
@@ -523,6 +528,9 @@ KV3_INSN_PATTERN_MATCH = {
     "mulwd":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "mulw":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
 
+    "mulw":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "mulsuwd":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+
     "maddw": STD_2OP_ACC_PATTERN,
     "madduw": STD_2OP_ACC_PATTERN,
     "msbfw": STD_2OP_ACC_PATTERN,
@@ -602,6 +610,9 @@ KV3_INSN_PATTERN_MATCH = {
 
     "rfe": NOP_PATTERN,
     "ret": NOP_PATTERN,
+
+    "dtouchl": DINVALL_PATTERN,
+    "iinvals": DINVALL_PATTERN,
 }
 
 class KV3Architecture(Architecture):
