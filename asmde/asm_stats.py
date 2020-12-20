@@ -51,27 +51,35 @@ if __name__ == "__main__":
         # TODO/FIXME: optimize file reading (line by line rather than full file at once)
         full_input_file = input_stream.read()
         for line_no, line in enumerate(full_input_file.split("\n")):
+            if "file format" in line:
+                # skipped line defining file format
+                continue
             lexem_list = lexer.generate_line_lexems(line)
             if args.lexer_verbose:
                 print(lexem_list)
             dbg_object = DebugObject(line_no)
-            try:
+            if args.allow_error:
+                try:
+                    if args.objdump:
+                        asm_parser.parse_objdump_line(lexem_list, dbg_object=dbg_object)
+                    else:
+                        asm_parser.parse_asm_line(lexem_list, dbg_object=dbg_object)
+                except:
+                    print("error @line {}, {}".format(line_no, line))
+                    print(lexem_list)
+                    error_count += 1
+                    if error_count > args.allow_error:
+                        raise
+            else:
+                # if no arrow is allowed, we do not try/except to 
+                # be sure to catch the first error where it's raised
+                # which simplify debug (e.g. though pdb)
                 if args.objdump:
                     asm_parser.parse_objdump_line(lexem_list, dbg_object=dbg_object)
                 else:
                     asm_parser.parse_asm_line(lexem_list, dbg_object=dbg_object)
-            except:
-                print("error @line {}, {}".format(line_no, line))
-                print(lexem_list)
-                error_count += 1
-                if error_count > args.allow_error:
-                    raise
         # finish program (e.g. connecting last BB to sink)
         asm_parser.program.end_program()
-        print(asm_parser.program.bb_list)
-        for label in asm_parser.program.bb_label_map:
-            print("label: {}".format(label))
-            print(asm_parser.program.bb_label_map[label].bundle_list)
 
     stats = ProgramStatistics()
     stats.analyse_program(program)
