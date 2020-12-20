@@ -317,7 +317,8 @@ class BasicBlock:
         self.succs += merged_bb.succs
         assert (self.bundle_list == [] or merged_bb.bundle_list == [])
         self.bundle_list = self.bundle_list or merged_bb.bundle_list
-        assert (self.index is None or merged_bb.index is None)
+        if not (self.index is None or merged_bb.index is None):
+            print("[WARNING] duplicate index for bb {}/{} in BasicBlock.merge_in".format(self, merged_bb)) 
         self.index = self.index or merged_bb.index
 
 
