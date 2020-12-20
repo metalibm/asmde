@@ -54,6 +54,16 @@ class RegisterPattern_QuadStd(RegisterPattern):
     VIRTUAL_PATTERN_CLASS = VirtualRegisterPattern_QuadStd
     PHYSICAL_PATTERN_CLASS = PhysicalRegisterPattern_QuadStd
 
+class RegisterPattern_SubAcc(RegisterPattern_Acc):
+    @classmethod
+    def parse(PRP_Class, arch, lexem_list):
+        acc_reg, lexem_list = RegisterPattern_Acc.parse(arch, lexem_list)
+        if len(lexem_list) and isinstance(lexem_list[0], Lexem) and lexem_list[0].value in ["_lo", "_hi"]:
+            # TODO/FIXME: wrongly generating a full acc register when only a sub-part
+            # should be considered
+            return acc_reg, lexem_list[1:]
+        return None
+
 class SpecialRegisterPattern(PhysicalRegisterPattern):
     REG_PATTERN = "\$([\w\d_]+)"
     REG_LEXEM = SpecialRegisterLexem
@@ -139,6 +149,19 @@ LOAD_PATTERN = SequentialPattern(
                             use_list[1].instanciate(color_map),
                             use_list[0].instanciate(color_map))))
 
+LOAD_ACC_PATTERN = SequentialPattern(
+    [OpcodePattern("opc", match_predicate=True), RegisterPattern_Acc("dst"), AddressPattern_Std("addr")],
+    lambda result:
+        Instruction(result["opc"],
+                    use_list=(result["addr"].base + result["addr"].offset),
+                    def_list=result["dst"],
+                    dump_pattern=lambda color_map, use_list, def_list:
+                        "{} {} = {}[{}]".format(
+                            result["opc"],
+                            def_list[0].instanciate(color_map),
+                            use_list[1].instanciate(color_map),
+                            use_list[0].instanciate(color_map))))
+
 DINVALL_PATTERN = SequentialPattern(
     [OpcodePattern("opc", match_predicate=True), AddressPattern_Std("addr")],
     lambda result:
@@ -178,6 +201,20 @@ LOAD_QUAD_PATTERN = SequentialPattern(
 
 STORE_PATTERN = SequentialPattern(
     [OpcodePattern("opc", match_predicate=True), AddressPattern_Std("dst_addr"), RegisterPattern_Std("src")],
+    lambda result:
+        Instruction(result["opc"],
+                    use_list=result["src"],
+                    def_list=(result["dst_addr"].base + result["dst_addr"].offset),
+                    dump_pattern=lambda color_map, use_list, def_list:
+                        "{} {}[{}] = {}".format(
+                            result["opc"],
+                            def_list[1].instanciate(color_map),
+                            def_list[0].instanciate(color_map),
+                            use_list[0].instanciate(color_map)
+                            )))
+
+STORE_ACC_PATTERN = SequentialPattern(
+    [OpcodePattern("opc", match_predicate=True), AddressPattern_Std("dst_addr"), RegisterPattern_Acc("src")],
     lambda result:
         Instruction(result["opc"],
                     use_list=result["src"],
@@ -301,16 +338,40 @@ STD_2OP_ACC_PATTERN = SequentialPattern(
                         def_list=result["acc"],
                         dump_pattern=lambda color_map, use_list, def_list: "{} {} = {}, {}".format(result["opc"], def_list[0].instanciate(color_map), use_list[0].instanciate(color_map), use_list[1].instanciate(color_map)))
     )
+
+STD_2OP_DUAL_RESULT_PATTERN = SequentialPattern(
+        [OpcodePattern("opc"), RegisterPattern_DualStd("dst"), RegisterPattern_Std("lhs"), RegisterPattern_Std("rhs")],
+        lambda result:
+            Instruction(result["opc"],
+                        use_list=(result["lhs"] + result["rhs"]),
+                        def_list=result["dst"],
+                        dump_pattern=lambda color_map, use_list, def_list:
+                            "{} {} = {}, {}".format(
+                                result["opc"],
+                                def_list[0].instanciate(color_map),
+                                use_list[0].instanciate(color_map),
+                                use_list[1].instanciate(color_map))))
+
+
 DUAL_2OP_PATTERN = SequentialPattern(
         [OpcodePattern("opc"), RegisterPattern_DualStd("dst"), RegisterPattern_Std("lhs"), RegisterPattern_Std("rhs")],
         lambda result: Instruction(result["opc"], use_list=(result["lhs"] + result["rhs"]), def_list=result["dst"], 
                                    dump_pattern=lambda color_map, use_list, def_list: "{} {} = {}, {}".format(result["opc"], instanciate_dual_reg(color_map, Register.Std, def_list[0:2]), use_list[0].instanciate(color_map), use_list[1].instanciate(color_map)))
     )
-MOVEFO_PATTERN = SequentialPattern(
-        [OpcodePattern("opc"), RegisterPattern_Acc("dst"), RegisterPattern_Std("lhs"), RegisterPattern_Std("rhs")],
-        lambda result: Instruction(result["opc"], use_list=(result["lhs"] + result["rhs"]), def_list=result["dst"],
-                                   dump_pattern=lambda color_map, use_list, def_list: "movefo {} = {}, {}".format(def_list[0].instanciate(color_map), use_list[0].instanciate(color_map), use_list[1].instanciate(color_map)))
-    )
+
+# FIXME: add support for sub-register part selector
+MOVETQ_PATTERN = SequentialPattern(
+        [OpcodePattern("opc"), RegisterPattern_SubAcc("dst"), RegisterPattern_Std("lhs"), RegisterPattern_Std("rhs")],
+        lambda result: Instruction(
+                            result["opc"],
+                            use_list=(result["lhs"] + result["rhs"]),
+                            def_list=result["dst"],
+                            dump_pattern=lambda color_map, use_list, def_list:
+                                "{} {} = {}, {}".format(
+                                    result["opc"],
+                                    def_list[0].instanciate(color_map),
+                                    use_list[0].instanciate(color_map), use_list[1].instanciate(color_map))))
+
 MOVEFA_PATTERN = SequentialPattern(
         [OpcodePattern("movefa"), RegisterPattern_Std("dst"), RegisterPattern_Acc("src")],
         lambda result: Instruction("movefo", use_list=(result["src"]), def_list=result["dst"],
@@ -334,6 +395,9 @@ BRANCH_PATTERN = SequentialPattern(
 
 NOP_PATTERN = SequentialPattern([OpcodePattern("opc")], lambda result: Instruction(result["opc"]))
 
+STD_2OP_OR_1OP1IMM_PATTERN = DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN])
+COMP_PATTERN = DisjonctivePattern([COMP_OP_PATTERN, COMP_IMM_PATTERN])
+
 KV3_INSN_PATTERN_MATCH = {
     # TODO/FIXME, rswap should consider both src/dst as used and defined
     "rswap": STD_1OP_SPEC2PHY_PATTERN,
@@ -348,6 +412,7 @@ KV3_INSN_PATTERN_MATCH = {
     "call": GOTO_PATTERN,
 
     "make": STD_IMM_PATTERN,
+    "pcrel": STD_IMM_PATTERN,
 
     "goto": GOTO_PATTERN,
     "cb": BRANCH_PATTERN,
@@ -370,9 +435,13 @@ KV3_INSN_PATTERN_MATCH = {
     "sq":   STORE_DUAL_PATTERN,
     "so":   STORE_QUAD_PATTERN,
 
+    "lv":   LOAD_ACC_PATTERN,
+    "sv":   STORE_ACC_PATTERN,
+
     "acswapd":   STORE_DUAL_PATTERN,
     "aladdd":   STORE_PATTERN,
     "alclrd": LOAD_PATTERN,
+    "alclrw": LOAD_PATTERN,
 
     "compd": DisjonctivePattern([COMP_OP_PATTERN, COMP_IMM_PATTERN]),
     "compw": DisjonctivePattern([COMP_OP_PATTERN, COMP_IMM_PATTERN]),
@@ -384,12 +453,52 @@ KV3_INSN_PATTERN_MATCH = {
     "maxd":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "mind":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
 
+    "maxud":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "minud":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+
     "addw":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "sbfw":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "addwd":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "adduwd":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "negw": STD_1OP_PATTERN,
 
+    "addwp":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "sbfwp":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+
+    "fwidenlwd": STD_1OP_PATTERN,
+    "fwidenmwd": STD_1OP_PATTERN,
+    "fnarrowdw": STD_1OP_PATTERN,
+    "fwidenlwd": STD_1OP_PATTERN,
+
+    "float": COMP_PATTERN,
+    "floatuw": COMP_PATTERN,
+    "fixed": COMP_PATTERN,
+    "fixeduw": COMP_PATTERN,
+
+    "floatd": COMP_PATTERN,
+    "floatud": COMP_PATTERN,
+    "fixedd": COMP_PATTERN,
+    "fixedud": COMP_PATTERN,
+
+    "fnegw": STD_1OP_PATTERN,
+    "fnegd": STD_1OP_PATTERN,
+
+    "fsbfw": STD_2OP_PATTERN,
+    "faddw": STD_2OP_PATTERN,
+    "fmulw": STD_2OP_PATTERN,
+
+    "fsbfd": STD_2OP_PATTERN,
+    "faddd": STD_2OP_PATTERN,
+    "fmuld": STD_2OP_PATTERN,
+
+    "ffmaw": STD_2OP_ACC_PATTERN,
+    "ffmad": STD_2OP_ACC_PATTERN,
+
+    "ffmsw": STD_2OP_ACC_PATTERN,
+    "ffmsd": STD_2OP_ACC_PATTERN,
+
+    "fcompw": DisjonctivePattern([COMP_OP_PATTERN, COMP_IMM_PATTERN]),
+    "fcompd": DisjonctivePattern([COMP_OP_PATTERN, COMP_IMM_PATTERN]),
 
     "srlw":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "srsw":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
@@ -397,22 +506,47 @@ KV3_INSN_PATTERN_MATCH = {
     "sraw":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "rorw":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
 
+    "srlwps":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "srswps":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "sllwps":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "srawps":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "rorwps":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+
+    "absw": STD_1OP_PATTERN,
+    "abswp": STD_1OP_PATTERN,
+    "absd": STD_1OP_PATTERN,
+
     "negd": STD_1OP_PATTERN,
     "addd":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "sbfd":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+
+    "stsud": STD_2OP_PATTERN,
 
     "addx2d":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "addx4d":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "addx8d":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "addx16d":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
 
+    "addx2w":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "addx4w":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "addx8w":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "addx16w":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+
     "muld":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "mulwd":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "mulw":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+
+    "maddw": STD_2OP_ACC_PATTERN,
+    "madduw": STD_2OP_ACC_PATTERN,
+    "msbfw": STD_2OP_ACC_PATTERN,
+
     "madduwd": STD_2OP_ACC_PATTERN,
     "maddwd": STD_2OP_ACC_PATTERN,
     "maddd": STD_2OP_ACC_PATTERN,
     "msbfd": STD_2OP_ACC_PATTERN,
+
+    "muludt": STD_2OP_DUAL_RESULT_PATTERN,
+    "muldt": STD_2OP_DUAL_RESULT_PATTERN,
 
     "srld":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "srsd":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
@@ -427,13 +561,15 @@ KV3_INSN_PATTERN_MATCH = {
 
     "ctzd": STD_1OP_PATTERN,
     "ctzw": STD_1OP_PATTERN,
+    "clzd": STD_1OP_PATTERN,
+    "clzw": STD_1OP_PATTERN,
 
     "zxbd": STD_1OP_PATTERN,
     "zxhd": STD_1OP_PATTERN,
     "zxwd": STD_1OP_PATTERN,
-    "sxwd": STD_1OP_PATTERN,
-    "zxbd": STD_1OP_PATTERN,
     "sxbd": STD_1OP_PATTERN,
+    "sxhd": STD_1OP_PATTERN,
+    "sxwd": STD_1OP_PATTERN,
 
     "notd": STD_1OP_PATTERN,
     "copyd": STD_1OP_PATTERN,
@@ -445,14 +581,18 @@ KV3_INSN_PATTERN_MATCH = {
     "andnd":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "ord":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "xord":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+
     "lnandd":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "landd":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+
+    "lnorw":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
 
     "andw":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "andnw":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "orw":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "xorw":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
 
-    "movefo": MOVEFO_PATTERN,
+    "movetq": MOVETQ_PATTERN,
     "movefa": MOVEFA_PATTERN,
 
     "nop": NOP_PATTERN,
