@@ -183,12 +183,6 @@ class Bundle:
         return any(insn.is_jump for insn in self.insn_list)
 
 
-class RegFileDescription:
-    def __init__(self, reg_class, num_phys_reg, reg_ctor, virtual_reg_ctor):
-        self.reg_class = reg_class
-        self.num_phys_reg = num_phys_reg
-        self.reg_ctor = reg_ctor
-        self.virtual_reg_ctor = virtual_reg_ctor
 
 class RegFile:
     def __init__(self, description):
@@ -214,16 +208,24 @@ class SpecialRegFile(RegFile):
     def __init__(self, description):
         self.description = description
         self.special_pool = {}
-    def get_special_reg_object(self, tag, reg_constraint=no_constraint):
+    def get_special_reg_object(self, tag):
         if not tag in self.special_pool:
-            self.special_pool[tag] = PhysicalRegister(tag, self.description.reg_class, constraint=reg_constraint)
+            self.special_pool[tag] = PhysicalRegister(tag, self.description.reg_class)
         return self.special_pool[tag]
         
+class RegFileDescription:
+    """ descriptor of a register file object """
+    def __init__(self, reg_class, num_phys_reg, reg_ctor, virtual_reg_ctor, reg_file_class=RegFile):
+        self.reg_class = reg_class
+        self.num_phys_reg = num_phys_reg
+        self.reg_ctor = reg_ctor
+        self.virtual_reg_ctor = virtual_reg_ctor
+        self.reg_file_class = reg_file_class
 
 class Architecture:
     """ Base class for architecture description """
     def __init__(self, reg_file_description_set, insn_patterns):
-        self.reg_pool = dict((reg_desc.reg_class, RegFile(reg_desc)) for reg_desc in reg_file_description_set)
+        self.reg_pool = dict((reg_desc.reg_class, reg_desc.reg_file_class(reg_desc)) for reg_desc in reg_file_description_set)
         # table (insn pattern) -> Pattern
         self.insn_patterns = insn_patterns
 
@@ -233,7 +235,7 @@ class Architecture:
     def get_unique_phys_reg_object(self, index, reg_class):
         return self.reg_pool[reg_class].get_unique_phys_reg_object(index)
 
-    def get_special_reg_object(self, tag, reg_class):
+    def get_special_reg_object(self, tag, reg_class=Register.Special):
         assert reg_class is Register.Special
         return self.reg_pool[reg_class].get_special_reg_object(tag)
 
