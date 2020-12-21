@@ -381,6 +381,7 @@ KV3_INSN_PATTERN_MATCH = {
     "wfxm": STD_1OP_PHY2SPEC_PATTERN,
     "set": STD_1OP_PHY2SPEC_PATTERN,
 
+    "iget": CALL_1OP_PATTERN,
     "icall": CALL_1OP_PATTERN,
     "scall": DisjonctivePattern([CALL_1OP_PATTERN, CALL_IMM_PATTERN]),
     "igoto": CALL_1OP_PATTERN,
@@ -414,6 +415,7 @@ KV3_INSN_PATTERN_MATCH = {
     "sv":   DisjonctivePattern([STORE_ACC_PATTERN, STORE_COND_ACC_PATTERN]),
 
     "acswapd":   STORE_DUAL_PATTERN,
+    "acswapw":   STORE_DUAL_PATTERN,
     "aladdd":   STORE_PATTERN,
     "alclrd": LOAD_PATTERN,
     "alclrw": LOAD_PATTERN,
@@ -437,6 +439,8 @@ KV3_INSN_PATTERN_MATCH = {
     "addw":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "sbfw":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "addwd":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "sbfwd":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "sbfuwd":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "adduwd":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "negw": STD_1OP_PATTERN,
 
@@ -454,7 +458,7 @@ KV3_INSN_PATTERN_MATCH = {
 
     "floatw": COMP_PATTERN,
     "floatuw": COMP_PATTERN,
-    "fixed": COMP_PATTERN,
+    "fixedw": COMP_PATTERN,
     "fixeduw": COMP_PATTERN,
 
     "floatd": COMP_PATTERN,
@@ -474,6 +478,12 @@ KV3_INSN_PATTERN_MATCH = {
     "fsbfw": STD_2OP_PATTERN,
     "faddw": STD_2OP_PATTERN,
     "fmulw": STD_2OP_PATTERN,
+    "fmulwc": STD_2OP_PATTERN,
+    "fmulcwc": STD_2OP_PATTERN,
+
+    "fsbfwd": STD_2OP_PATTERN,
+    "faddwd": STD_2OP_PATTERN,
+    "fmulwd": STD_2OP_PATTERN,
 
     "fsbfwp": STD_2OP_PATTERN,
     "faddwp": STD_2OP_PATTERN,
@@ -483,10 +493,15 @@ KV3_INSN_PATTERN_MATCH = {
     "faddd": STD_2OP_PATTERN,
     "fmuld": STD_2OP_PATTERN,
 
+    "fsbfdp": DUAL_2OP_PATTERN,
+    "fadddp": DUAL_2OP_PATTERN,
+
     "ffmaw": STD_2OP_ACC_PATTERN,
+    "ffmawd": STD_2OP_ACC_PATTERN,
     "ffmad": STD_2OP_ACC_PATTERN,
 
     "ffmsw": STD_2OP_ACC_PATTERN,
+    "ffmswd": STD_2OP_ACC_PATTERN,
     "ffmsd": STD_2OP_ACC_PATTERN,
 
     "ffmawp": STD_2OP_ACC_PATTERN,
@@ -520,6 +535,9 @@ KV3_INSN_PATTERN_MATCH = {
     "abswp": STD_1OP_PATTERN,
     "absd": STD_1OP_PATTERN,
 
+    "abdw": STD_2OP_PATTERN,
+    "abdd": STD_2OP_PATTERN,
+
     "negd": STD_1OP_PATTERN,
     "addd":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "sbfd":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
@@ -536,8 +554,19 @@ KV3_INSN_PATTERN_MATCH = {
     "addx8w":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "addx16w":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
 
+    "sbfx2d":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "sbfx4d":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "sbfx8d":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "sbfx16d":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+
+    "sbfx2w":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "sbfx4w":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "sbfx8w":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "sbfx16w":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+
     "muld":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "mulwd":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "muluwd":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "mulw":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
 
     "mulw":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
@@ -566,6 +595,7 @@ KV3_INSN_PATTERN_MATCH = {
     "rold":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
 
     "sbmm8":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "sbmmt8":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
 
     "insf":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_2IMM_PATTERN]),
     "extfz":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_2IMM_PATTERN]),
@@ -575,6 +605,9 @@ KV3_INSN_PATTERN_MATCH = {
     "ctzw": STD_1OP_PATTERN,
     "clzd": STD_1OP_PATTERN,
     "clzw": STD_1OP_PATTERN,
+
+    "cbsd": STD_1OP_PATTERN,
+    "cbsw": STD_1OP_PATTERN,
 
     "zxbd": STD_1OP_PATTERN,
     "zxhd": STD_1OP_PATTERN,
@@ -594,17 +627,25 @@ KV3_INSN_PATTERN_MATCH = {
     "andd":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "andnd":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "ord":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "nord":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "ornd":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "xord":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "nandd":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
 
     "lnandd":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "landd":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
 
     "lnorw":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "lorw":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "ornw":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
 
     "andw":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "nandw":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "andnw":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "orw":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "norw":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "xorw":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "nxorw":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
 
     "movetq": MOVETQ_PATTERN,
     "movefa": MOVEFA_PATTERN,
@@ -620,6 +661,7 @@ KV3_INSN_PATTERN_MATCH = {
     "stop": NOP_PATTERN,
     "errop": NOP_PATTERN,
     "tlbwrite": NOP_PATTERN,
+    "tlbprobe": NOP_PATTERN,
 
     "rfe": NOP_PATTERN,
     "ret": NOP_PATTERN,
