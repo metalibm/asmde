@@ -260,7 +260,7 @@ STD_1OP_1IMM_PATTERN = SequentialPattern(
         [OpcodePattern("opc"), RegisterPattern_Std("dst"), RegisterPattern_Std("op"), ImmediatePattern("imm")],
         lambda result:
             Instruction(result["opc"],
-                        match_pattern="imm",
+                        match_pattern="imm %x" % (result["imm"].value),
                         use_list=(result["op"]),
                         def_list=result["dst"],
                         dump_pattern=lambda color_map, use_list, def_list:
