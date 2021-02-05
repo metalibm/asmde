@@ -85,11 +85,30 @@ class PredicatePattern(Pattern):
             return Predicate(lexem_list[0].value), lexem_list[1:]
         return None
 
+
+class KV3_MatchPattern:
+    def __init__(self, tag):
+        self.tag = tag
+
+    def dump(self, verbose=False):
+        return self.tag
+
+class KV3_ImmediateMatchPattern(KV3_MatchPattern):
+    def __init__(self, value):
+        KV3_MatchPattern.__init__(self, "imm")
+        self.value = value
+
+    def dump(self, verbose=True):
+        if verbose:
+            return "%s %x" % (self.tag, self.value)
+        else:
+            return "%s" % self.tag
+
 COMP_IMM_PATTERN = SequentialPattern(
     [OpcodePattern("opc"), PredicatePattern("pred"), RegisterPattern_Std("dst"), RegisterPattern_Std("lhs"), ImmediatePattern("imm")],
     lambda result:
         Instruction(result["opc"] + "." + result["pred"].specifier,
-                    match_pattern="imm",
+                    match_pattern=KV3_ImmediateMatchPattern(result["imm"].value),
                     use_list=(result["lhs"]),
                     def_list=result["dst"],
                     dump_pattern=lambda color_map, use_list, def_list:
@@ -129,7 +148,7 @@ CMOVE_IMM_PATTERN = SequentialPattern(
     [OpcodePattern("opc"), PredicatePattern("pred"), RegisterPattern_Std("cond"), RegisterPattern_Std("dst"), ImmediatePattern("imm")],
     lambda result:
         Instruction(result["opc"] + "." + result["pred"].specifier,
-                    match_pattern="imm",
+                    match_pattern=KV3_ImmediateMatchPattern(result["imm"].value),
                     use_list=(result["cond"]),
                     def_list=result["dst"],
                     dump_pattern=lambda color_map, use_list, def_list:
@@ -245,14 +264,14 @@ CALL_IMM_PATTERN = SequentialPattern(
         [OpcodePattern("opc"), ImmediatePattern("imm")],
         lambda result:
             Instruction(result["opc"],
-                        match_pattern="imm",
+                        match_pattern=KV3_ImmediateMatchPattern(result["imm"].value),
                         dump_pattern=lambda color_map, use_list, def_list: "{} {}".format(result["opc"], result["imm"])))
-    
+
 STD_IMM_PATTERN = SequentialPattern(
-        [OpcodePattern("opc"), RegisterPattern_Std("dst"), ImmediatePattern("op")],
+        [OpcodePattern("opc"), RegisterPattern_Std("dst"), ImmediatePattern("imm")],
         lambda result:
             Instruction(result["opc"],
-                        match_pattern="imm",
+                        match_pattern=KV3_ImmediateMatchPattern(result["imm"].value),
                         def_list=result["dst"],
                         dump_pattern=lambda color_map, use_list, def_list: "{} {} = {}, {}".format(result["opc"], def_list[0].instanciate(color_map), use_list[0].instanciate(color_map)))
     )
@@ -260,7 +279,7 @@ STD_1OP_1IMM_PATTERN = SequentialPattern(
         [OpcodePattern("opc"), RegisterPattern_Std("dst"), RegisterPattern_Std("op"), ImmediatePattern("imm")],
         lambda result:
             Instruction(result["opc"],
-                        match_pattern="imm %x" % (result["imm"].value),
+                        match_pattern=KV3_ImmediateMatchPattern(result["imm"].value),
                         use_list=(result["op"]),
                         def_list=result["dst"],
                         dump_pattern=lambda color_map, use_list, def_list:

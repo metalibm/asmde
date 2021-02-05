@@ -13,13 +13,13 @@ class ProgramStatistics:
         self.opc_map = collections.defaultdict(lambda: 0)
 
 
-    def analyse_program(self, program):
+    def analyse_program(self, program, verbose=False):
         for bb in program.bb_list:
             for bundle in bb.bundle_list:
                 for insn in bundle.insn_list:
                     insn_tag = insn.insn_object
                     if not insn.match_pattern is None:
-                        insn_tag = insn_tag + "-" + insn.match_pattern
+                        insn_tag = insn_tag + "-" + insn.match_pattern.dump(verbose)
                     self.opc_map[insn_tag] += 1
 
     def dump(self, print_callback=print):
@@ -38,6 +38,7 @@ if __name__ == "__main__":
     parser.add_argument("--input", action="store", help="select input file")
     parser.add_argument("--objdump", action="store_const", default=False, const=True, help="indicate that assembly input is in objdump form")
     parser.add_argument("--arch", action="store", default=DummyArchitecture(), type=parse_architecture, help="select target architecture")
+    parser.add_argument("--verbose-pattern", action="store_const", default=False, const=True, help="indicate that verbose match pattern must be use to distinguish insn")
 
     args = parser.parse_args()
 
