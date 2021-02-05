@@ -22,10 +22,10 @@ class ProgramStatistics:
                         insn_tag = insn_tag + "-" + insn.match_pattern
                     self.opc_map[insn_tag] += 1
 
-    def dump(self):
-        print("Program statistics")
+    def dump(self, print_callback=print):
+        print_callback("# Program statistics")
         for opc in self.opc_map:
-            print("{count:5} {opc:15}".format(opc=opc, count=self.opc_map[opc]))
+            print_callback("{count:5} {opc:15}".format(opc=opc, count=self.opc_map[opc]))
 
 
 if __name__ == "__main__":
@@ -71,7 +71,7 @@ if __name__ == "__main__":
                     if error_count > args.allow_error:
                         raise
             else:
-                # if no arrow is allowed, we do not try/except to 
+                # if no arrow is allowed, we do not try/except to
                 # be sure to catch the first error where it's raised
                 # which simplify debug (e.g. though pdb)
                 if args.objdump:
@@ -82,6 +82,10 @@ if __name__ == "__main__":
         asm_parser.program.end_program()
 
     stats = ProgramStatistics()
-    stats.analyse_program(program)
-    stats.dump()
+    stats.analyse_program(program, args.verbose_pattern)
+    if not args.output is None:
+        with open(args.output, "w") as out_stream:
+            stats.dump(print_callback=(lambda s: out_stream.write(s+"\n")))
+    else:
+        stats.dump()
 
