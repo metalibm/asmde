@@ -443,6 +443,7 @@ KV3_INSN_PATTERN_MATCH = {
     "compw": DisjonctivePattern([COMP_OP_PATTERN, COMP_IMM_PATTERN]),
 
     "cmoved": DisjonctivePattern([CMOVE_OP_PATTERN, CMOVE_IMM_PATTERN]),
+    "cmovewp": DisjonctivePattern([CMOVE_OP_PATTERN, CMOVE_IMM_PATTERN]),
 
     "maxw":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "minw":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
@@ -461,10 +462,26 @@ KV3_INSN_PATTERN_MATCH = {
     "sbfwd":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "sbfuwd":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "adduwd":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+
     "negw": STD_1OP_PATTERN,
+    "negwp": STD_1OP_PATTERN,
 
     "addwp":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "sbfwp":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+
+    "addx2wp":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "addx4wp":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "addx8wp":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "addx16wp":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+
+    "sbfx2wp":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "sbfx4wp":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "sbfx8wp":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+    "sbfx16wp":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
+
+    "mulwq": DUAL_2OP_PATTERN,
+    "addwq": DUAL_2OP_PATTERN,
+    "sbfwq": DUAL_2OP_PATTERN,
 
     "fabsw": STD_1OP_PATTERN,
     "fabsd": STD_1OP_PATTERN,
@@ -484,6 +501,11 @@ KV3_INSN_PATTERN_MATCH = {
     "floatud": COMP_PATTERN,
     "fixedd": COMP_PATTERN,
     "fixedud": COMP_PATTERN,
+
+    "floatwp": COMP_PATTERN,
+    "floatuwp": COMP_PATTERN,
+    "fixedwp": COMP_PATTERN,
+    "fixeduwp": COMP_PATTERN,
 
     "fnegw": STD_1OP_PATTERN,
     "fnegwp": STD_1OP_PATTERN,
@@ -535,6 +557,8 @@ KV3_INSN_PATTERN_MATCH = {
 
     "fcompw": DisjonctivePattern([COMP_OP_PATTERN, COMP_IMM_PATTERN]),
     "fcompd": DisjonctivePattern([COMP_OP_PATTERN, COMP_IMM_PATTERN]),
+    "fcompwp": DisjonctivePattern([COMP_OP_PATTERN, COMP_IMM_PATTERN]),
+    "fcompnwp": DisjonctivePattern([COMP_OP_PATTERN, COMP_IMM_PATTERN]),
 
     "srlw":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
     "srsw":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN]),
