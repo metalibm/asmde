@@ -372,10 +372,11 @@ class LabelPattern(Pattern):
 
 
 class SequentialPattern:
-    def __init__(self, elt_pattern_list, result_builder):
+    def __init__(self, elt_pattern_list, result_builder, tag=""):
         self.elt_pattern_list = elt_pattern_list
         # callback to build the object result from a match
         self.result_builder = result_builder
+        self.tag = tag
 
     def match(self, arch, lexem_list):
         match_result = {}
@@ -393,8 +394,9 @@ class SequentialPattern:
 
 class DisjonctivePattern:
     """ match one of the element in the list """
-    def __init__(self, elt_pattern_list):
+    def __init__(self, elt_pattern_list, tag_list=None):
         self.elt_pattern_list = elt_pattern_list
+        self.tag_list = tag_list if not tag_list is None else []
 
     def match(self, arch, lexem_list):
         for pattern in self.elt_pattern_list:
