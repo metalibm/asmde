@@ -1,5 +1,5 @@
-from arch.dummy import DummyArchitecture
-from arch.kv3 import KV3Architecture
+from asmde_arch.dummy import DummyArchitecture
+from asmde_arch.kv3 import KV3Architecture
 
 ARCH_CTOR_MAP = {
     "dummy": DummyArchitecture,
