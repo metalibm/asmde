@@ -3,8 +3,8 @@ import collections
 
 from asmde.allocator import Program, DebugObject
 from asmde.parser import AsmParser
-from arch.dummy import DummyArchitecture
-from asmde. arch_list import parse_architecture
+from asmde.arch.dummy import DummyArchitecture
+from asmde.arch_list import parse_architecture
 import asmde.lexer as lexer
 
 
