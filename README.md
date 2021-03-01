@@ -4,15 +4,23 @@ Build status: [![Build Status](https://travis-ci.org/nibrunie/asmde.svg?branch=m
 
 asmde is a small set of utilities to help analyse and developp assembly programs.
 
+## Install
+
+```
+pip3 install git+https://github.com/nibrunie/asmde.git
+```
+
 # Assembly statistics
 
-The command `asm_stats.py` parses an input file and generate an histogram of encountered assembly instructions.
-It supports both source assembly or objdump generation (with `--objdump` option).
+The command `python3 -m asm_stats` parses an input file and generates an histogram of encountered assembly instructions.
+It supports source assembly, trace (`--mode trace`), objdump parsing (`--mode objdump`).
 ```
-python3 asmde/asm_stats.py --arch <binary-arch> [--objdump] -input <input-file>
+python3 asmde/asm_stats.py --arch <binary-arch> [--mode objdump|--mode trace] -input <input-file>
 ```
 
-To objdump a file compatible with the `--objdump` you shoud use the following options: ` -d --no-addresses --no-show-raw-insn`.
+To objdump a file compatible with the `--mode objdump` you shoud use the following options: `objdump -d --no-addresses --no-show-raw-insn`.
+
+To output an histogram displaying all the architecture instructions (and not just the one encountered in the parsed input) you can add `--display-all-opcodes`.
 
 
 # Register Assignator
