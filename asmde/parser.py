@@ -412,6 +412,10 @@ class AsmParser:
         self.ongoing_bundle = Bundle()
         self.program = program
         self.arch = arch
+        # information used to distinguish bundles when parsing
+        # assembly traces
+        self.last_timestamp = None
+        self.last_program_counter = None
 
     def parse_asm_line(self, lexem_list, dbg_object):
         if not len(lexem_list): return
@@ -557,6 +561,101 @@ class AsmParser:
             print("unknown macro {} @ {} ".format(macro_name.value, dbg_object))
             #Error
             sys.exit(1)
+
+    def parse_trace_line(self, lexem_list, dbg_object):
+        """ parse assembly trace """
+        if not len(lexem_list): return
+
+        head = lexem_list[0]
+
+        if isinstance(head, asmde.lexer.TraceCommentHeadLexem):
+            return
+        elif isinstance(head, MacroLexem):
+            self.parse_macro(lexem_list[1:], dbg_object)
+            return
+        elif isinstance(head, (asmde.lexer.FunctionStartLexem, asmde.lexer.FunctionEndLexem)):
+            # ignoring function start and end
+            return
+
+
+        def match_field_sep(lexem_list):
+            """ in ASM trace timestamp and PC field ends with ':' """
+            head = lexem_list[0]
+            if isinstance(head, LabelEndLexem):
+                return lexem_list[1:]
+            return None
+
+        # trace is
+        # <timestamp>':' <PC as hex>':'  <operation>
+        timestamp = lexem_list[0]
+        lexem_list = match_field_sep(lexem_list[1:])
+        assert not lexem_list is None
+        program_counter = lexem_list[0]
+        lexem_list = match_field_sep(lexem_list[1:])
+        assert not lexem_list is None
+
+        # if the timestamp has changed (should be increase)
+        # we commit the previous bundle and open a new one
+        if self.last_timestamp != timestamp:
+            self.program.add_bundle(self.ongoing_bundle)
+            self.ongoing_bundle = Bundle()
+        # updating timestamp
+        self.last_timestamp = timestamp
+        self.last_program_counter = program_counter
+
+        # strip HexImmediateLexem from lexem_list as they corresponds to register value dump
+        # in traces
+        lexem_list = list(filter(lambda v: not isinstance(v, HexImmediateLexem), lexem_list))
+        head = lexem_list[0]
+
+        if isinstance(head, OperatorLexem) and head.value == "<":
+            # label
+            label = head.value
+            while not isinstance(lexem_list[0], OperatorLexem) or lexem_list[0].value != ">":
+                label = label + lexem_list.pop(0).value
+            assert isinstance(lexem_list[1], LabelEndLexem)
+            self.program.add_label(label)
+
+        elif isinstance(head, ObjdumpLabel):
+            assert isinstance(lexem_list[1], LabelEndLexem)
+            if len(lexem_list) > 1 and isinstance(lexem_list[1], LabelEndLexem):
+                if len(self.ongoing_bundle) != 0:
+                    print("Error: label can not be inserted in the middle of a bundle @ {}".format(dbg_object))
+                    sys.exit(1)
+                self.program.add_label(head.value)
+
+        elif isinstance(head, Lexem):
+            if head.value in self.arch.insn_patterns:
+                insn_pattern = self.arch.insn_patterns[head.value]
+                insn_match = insn_pattern.match(self.arch, lexem_list)
+                if insn_match is None:
+                    print("failed to match {} in {}".format(head.value, lexem_list))
+                    sys.exit(1)
+                else:
+                    insn_object, lexem_list = insn_match
+
+            else:
+                print("unable to parse {} @ {}, head={}".format(lexem_list, dbg_object, head))
+                raise NotImplementedError
+            # adding meta information
+            insn_object.dbg_object = dbg_object
+            # registering instruction
+            self.ongoing_bundle.add_insn(insn_object)
+            if insn_object.is_jump:
+                # succ = self.program.bb_label_map[insn_object.use_list[0]]
+                # TODO/FIXME jump bb label should be extract with method
+                #            and not directly from index 0 of use_list
+                succ = self.program.get_bb_by_label(insn_object.use_list[0])
+                self.program.current_bb.add_successor(succ)
+                succ.add_predecessor(self.program.current_bb)
+            # in objdump file, a instruction line may be ended by a bundle separator
+            #   goto label;;
+            if len(lexem_list) and isinstance(lexem_list[-1], BundleSeparatorLexem):
+                self.program.add_bundle(self.ongoing_bundle)
+                self.ongoing_bundle = Bundle()
+        else:
+            print(head, lexem_list, dbg_object)
+            raise NotImplementedError
 
     def parse_insn_from_list(self, lexem_list):
         insn = lexem_list[0]
