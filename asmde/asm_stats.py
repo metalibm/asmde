@@ -58,7 +58,7 @@ if __name__ == "__main__":
     parser.add_argument("--output", action="store", default=None, help="select output file (default stdout)")
     parser.add_argument("--allow-error", action="store", default=0, type=int, help="set the number of accepted errors before stopping")
     parser.add_argument("--input", action="store", nargs="+", help="select input file")
-    parser.add_argument("--objdump", action="store_const", default=False, const=True, help="indicate that assembly input is in objdump form")
+    parser.add_argument("--mode", action="store", default="objdump", choices=["objdump", "trace"], help="indicate assembly parsing mode")
     parser.add_argument("--arch", action="store", default=DummyArchitecture(), type=parse_architecture, help="select target architecture")
     parser.add_argument("--verbose-pattern", action="store_const", default=False, const=True, help="indicate that verbose match pattern must be use to distinguish insn")
     parser.add_argument("--display-all-opcodes", action="store_const", default=False, const=True, help="also display zero value count for absent opcodes")
@@ -88,8 +88,10 @@ if __name__ == "__main__":
                 dbg_object = DebugObject(line_no)
                 if args.allow_error:
                     try:
-                        if args.objdump:
+                        if args.mode == "objdump":
                             asm_parser.parse_objdump_line(lexem_list, dbg_object=dbg_object)
+                        elif args.mode == "trace":
+                            asm_parser.parse_trace_line(lexem_list, dbg_object=dbg_object)
                         else:
                             asm_parser.parse_asm_line(lexem_list, dbg_object=dbg_object)
                     except:
@@ -99,11 +101,13 @@ if __name__ == "__main__":
                         if error_count > args.allow_error:
                             raise
                 else:
-                    # if no arrow is allowed, we do not try/except to
+                    # if no error is allowed, we do not try/except to
                     # be sure to catch the first error where it's raised
-                    # which simplify debug (e.g. though pdb)
-                    if args.objdump:
+                    # which simplify debug (e.g. through pdb)
+                    if args.mode == "objdump":
                         asm_parser.parse_objdump_line(lexem_list, dbg_object=dbg_object)
+                    elif args.mode == "trace":
+                        asm_parser.parse_trace_line(lexem_list, dbg_object=dbg_object)
                     else:
                         asm_parser.parse_asm_line(lexem_list, dbg_object=dbg_object)
             # finish program (e.g. connecting last BB to sink)
@@ -111,7 +115,7 @@ if __name__ == "__main__":
 
         program_stats = ProgramStatistics(args.arch, input_name)
         program_stats.analyse_program(program, args.verbose_pattern)
-        program_stats.fuse_in(stats, exhaustive_opc=True)
+        program_stats.fuse_in(stats, exhaustive_opc=args.display_all_opcodes)
 
     def display_title(print_callback):
         print_callback("# " + ", ".join(args.input))
