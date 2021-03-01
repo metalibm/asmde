@@ -47,6 +47,10 @@ class LabelEndLexem(ParentLexem):
 class BundleSeparatorLexem(ParentLexem):
     PATTERN = ";;"
 
+class FunctionStartLexem(ParentLexem):
+    PATTERN = "{{{"
+class FunctionEndLexem(ParentLexem):
+    PATTERN = "}}}"
 
 class MacroLexem(ParentLexem):
     PATTERN = "\/\/#"
@@ -54,11 +58,21 @@ class MacroLexem(ParentLexem):
 class CommentHeadLexem(ParentLexem):
     PATTERN = "\/\/(?!#)"
 
+class TraceCommentHeadLexem(ParentLexem):
+    PATTERN = "#"
+
 class ObjdumpMacro(ParentLexem):
     PATTERN = "([\.]{3}|\*\*\*)"
 
 class ObjdumpLabel(ParentLexem):
     PATTERN = "<[\w\d._+-]+>"
+
+class DiscardedSymbol(ParentLexem):
+    PATTERN = "[,]"
+
+class UnmatchedLexem(ParentLexem):
+    """ class for unmatched lexem """
+    pass
 
 # extended regular expression for seperator, including
 # separators that will be included as valid lexems
@@ -73,7 +87,7 @@ def generate_line_lexems(s):
     for sub_word in re.split(SEP_PATTERN, s):
         if sub_word in ['', ' ', '\t']: continue
         lexem_match = None
-        for lexem_class in [ObjdumpMacro, ObjdumpLabel, CommentHeadLexem, LabelEndLexem, MacroLexem, HexImmediateLexem, ImmediateLexem, RegisterLexem, OperatorLexem, BundleSeparatorLexem, Lexem, SpecialRegisterLexem]:
+        for lexem_class in [ObjdumpMacro, ObjdumpLabel, FunctionStartLexem, FunctionEndLexem, CommentHeadLexem, TraceCommentHeadLexem, LabelEndLexem, MacroLexem, HexImmediateLexem, ImmediateLexem, RegisterLexem, OperatorLexem, BundleSeparatorLexem, Lexem, SpecialRegisterLexem]:
             lexem_match = lexem_class.match(sub_word)
             if lexem_match is None:
                 continue
@@ -87,7 +101,12 @@ def generate_line_lexems(s):
                     lexem_list = lexem_list + generate_line_lexems(remainder)
                 break
         if lexem_match is None:
-            print("could not match lexically '{}' ".format(sub_word))
+            if DiscardedSymbol.match(sub_word):
+                # discard
+                pass
+            else:
+                lexem_list.append(UnmatchedLexem(sub_word))
+                print("could not match lexically '{}' ".format(sub_word))
 
     return lexem_list
 
