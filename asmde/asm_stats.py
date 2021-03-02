@@ -60,6 +60,7 @@ if __name__ == "__main__":
     parser.add_argument("--input", action="store", nargs="+", help="select input file")
     parser.add_argument("--mode", action="store", default="objdump", choices=["objdump", "trace"], help="indicate assembly parsing mode")
     parser.add_argument("--arch", action="store", default=DummyArchitecture(), type=parse_architecture, help="select target architecture")
+    parser.add_argument("--verbose-lexing", action="store_const", default=False, const=True, help="enable verbose lexing (more debug/info/warning messages)")
     parser.add_argument("--verbose-pattern", action="store_const", default=False, const=True, help="indicate that verbose match pattern must be use to distinguish insn")
     parser.add_argument("--display-all-opcodes", action="store_const", default=False, const=True, help="also display zero value count for absent opcodes")
     parser.add_argument("--csv", action="store_const", default=False, const=True, help="output in csv format")
@@ -82,7 +83,7 @@ if __name__ == "__main__":
                 if "file format" in line:
                     # skipped line defining file format
                     continue
-                lexem_list = lexer.generate_line_lexems(line)
+                lexem_list = lexer.generate_line_lexems(line, verbose=args.verbose_lexing)
                 if args.lexer_verbose:
                     print(lexem_list)
                 dbg_object = DebugObject(line_no)

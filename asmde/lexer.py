@@ -81,7 +81,7 @@ SEP_PATTERN = "([ \t,=\?])+"
 # DUMMY SEPARATOR (to be discarded during lexing)
 DUMMY_SEP_PATTERN = "[ \t,=]+"
 
-def generate_line_lexems(s):
+def generate_line_lexems(s, verbose=False):
     """ generate the list of lexems found in line @p s """
     lexem_list = []
     for sub_word in re.split(SEP_PATTERN, s):
@@ -98,13 +98,13 @@ def generate_line_lexems(s):
                     lexem_list.append(lexem_class(lexem_match_string))
                 remainder = sub_word[lexem_match.end(0):]
                 if remainder != "":
-                    lexem_list = lexem_list + generate_line_lexems(remainder)
+                    lexem_list = lexem_list + generate_line_lexems(remainder, verbose=verbose)
                 break
         if lexem_match is None:
             if DiscardedSymbol.match(sub_word):
                 # discard
                 pass
-            else:
+            elif verbose:
                 lexem_list.append(UnmatchedLexem(sub_word))
                 print("could not match lexically '{}' ".format(sub_word))
 
