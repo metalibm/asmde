@@ -36,7 +36,7 @@ class ImmediateLexem(ParentLexem):
     PATTERN = "([+-]|)[0-9]+"
 
 class HexImmediateLexem(ParentLexem):
-    PATTERN = "(\(|)([+-]|)0x[0-9a-fA-F]+(\)|)"
+    PATTERN = "(\(|)([+-]|)0x[0-9a-fA-F_]+(\)|)"
 
 class OperatorLexem(ParentLexem):
     PATTERN = "[()\[\]\.<>]"
