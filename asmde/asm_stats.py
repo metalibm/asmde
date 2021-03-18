@@ -33,7 +33,7 @@ class ProgramStatistics:
         if exhaustive_display:
             opc_map = opc_map.union(self.arch.get_all_opc())
 
-        for opc in sorted(opc_map):
+        for opc in sorted(opc_map, key=lambda k: opc_map[k]):
             if csv_format:
                 out_format = "{opc}, {count}"
             else:
