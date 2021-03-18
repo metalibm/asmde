@@ -446,6 +446,9 @@ KV3_INSN_PATTERN_MATCH = {
     "comphq": DisjonctivePattern([COMP_OP_PATTERN, COMP_IMM_PATTERN], tag_list=["", "imm"]),
     "compnhq": DisjonctivePattern([COMP_OP_PATTERN, COMP_IMM_PATTERN], tag_list=["", "imm"]),
 
+    "compnwp": DisjonctivePattern([COMP_OP_PATTERN, COMP_IMM_PATTERN], tag_list=["", "imm"]),
+    "compwp": DisjonctivePattern([COMP_OP_PATTERN, COMP_IMM_PATTERN], tag_list=["", "imm"]),
+
     "cmoved": DisjonctivePattern([CMOVE_OP_PATTERN, CMOVE_IMM_PATTERN], tag_list=["", "imm"]),
     "cmovewp": DisjonctivePattern([CMOVE_OP_PATTERN, CMOVE_IMM_PATTERN], tag_list=["", "imm"]),
 
