@@ -708,8 +708,14 @@ KV3_INSN_PATTERN_MATCH = {
     "lnandd":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN], tag_list=["", "imm"]),
     "landd":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN], tag_list=["", "imm"]),
 
+    "lnord":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN], tag_list=["", "imm"]),
+    "lord":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN], tag_list=["", "imm"]),
+
     "lnorw":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN], tag_list=["", "imm"]),
     "lorw":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN], tag_list=["", "imm"]),
+    "lnandw":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN], tag_list=["", "imm"]),
+    "landw":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN], tag_list=["", "imm"]),
+
     "ornw":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN], tag_list=["", "imm"]),
 
     "andw":  DisjonctivePattern([STD_2OP_PATTERN, STD_1OP_1IMM_PATTERN], tag_list=["", "imm"]),
