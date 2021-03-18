@@ -86,7 +86,7 @@ if __name__ == "__main__":
                 lexem_list = lexer.generate_line_lexems(line, verbose=args.verbose_lexing)
                 if args.lexer_verbose:
                     print(lexem_list)
-                dbg_object = DebugObject(line_no)
+                dbg_object = DebugObject(line_no + 1)
                 if args.allow_error:
                     try:
                         if args.mode == "objdump":
