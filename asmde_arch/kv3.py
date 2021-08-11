@@ -773,4 +773,6 @@ class KV3Architecture(Architecture):
                 opc_set.add(opc)
         return opc_set
 
+    def hasBundle(self):
+        return True
 

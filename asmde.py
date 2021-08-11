@@ -99,7 +99,8 @@ if __name__ == "__main__":
 
                         print(insn.dump_pattern(color_map, insn.use_list, insn.def_list))
 
-            print(";;")
+            if asm_parser.arch.hasBundle():
+                print(";;")
 
 
     if args.output is None:

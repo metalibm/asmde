@@ -74,3 +74,6 @@ class DummyArchitecture(Architecture):
             INSN_PATTERN_MATCH
         )
 
+    def hasBundle(self):
+        return True
+

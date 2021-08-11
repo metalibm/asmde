@@ -421,6 +421,7 @@ class AsmParser:
         if not len(lexem_list): return
         head = lexem_list[0]
         if isinstance(head, BundleSeparatorLexem):
+            assert self.arch.hasBundle()
             self.program.add_bundle(self.ongoing_bundle)
             self.ongoing_bundle = Bundle()
         elif isinstance(head, MacroLexem):
@@ -458,6 +459,11 @@ class AsmParser:
                     succ = self.program.get_bb_by_label(insn_object.use_list[0])
                     self.program.current_bb.add_successor(succ)
                     succ.add_predecessor(self.program.current_bb)
+                if not self.arch.hasBundle():
+                    # if the architecture does not bundle multiple instructions
+                    # (e.g. VLIW), we only emit one instruction per bundle
+                    self.program.add_bundle(self.ongoing_bundle)
+                    self.ongoing_bundle = Bundle()
 
         else:
             raise NotImplementedError
