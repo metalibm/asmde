@@ -13,17 +13,16 @@ from asmde.parser import (
     LabelPattern
 )
 
-def instanciate_dual_reg(color_map, reg_class, reg_list):
-    """ Instanciate a pair of registers formed by the registers in reg_list """
-    instanciated_list = [reg.instanciate(color_map) for reg in reg_list]
-    return reg_class.build_multi_reg(instanciated_list)
 
 class RVRegister(Register):
+    """ RISC-V Register family """
     class IntReg(Register.RegClass):
+        """ Integer register """
         name = "Int"
         prefix = ""
         reg_prefix = "a"
     class FPReg(Register.RegClass):
+        """ Floating-point register """
         name = "Fp"
         prefix = ""
         reg_prefix = "f"
@@ -77,27 +76,83 @@ class RVAddressPattern_Std(Pattern):
             return None
         return AddrValue(base=base_value, offset=offset_value), lexem_list
 
+
+def loadDumpPattern(parseResult):
+    def dump(color_map, use_list, def_list):
+        return "{} {}, {}({})".format(parseResult["opc"],
+                                      def_list[0].instanciate(color_map),
+                                      use_list[1].instanciate(color_map),
+                                      use_list[0].instanciate(color_map))
+    return dump
+
+def storeDumpPattern(parseResult):
+    def dump(color_map, use_list, def_list):
+        return "{} {}, {}({})".format(parseResult["opc"],
+                                      use_list[0].instanciate(color_map),
+                                      use_list[2].instanciate(color_map),
+                                      use_list[1].instanciate(color_map))
+    return dump
+
+def std2opDumpPattern(parseResult):
+    def dump(color_map, use_list, def_list):
+        return "{} {}, {}({})".format(parseResult["opc"],
+                                      def_list[0].instanciate(color_map),
+                                      use_list[0].instanciate(color_map),
+                                      use_list[1].instanciate(color_map))
+    return dump
+
+class RV_MatchPattern:
+    def __init__(self, tag):
+        self.tag = tag
+
+    def dump(self, verbose=False):
+        return self.tag
+
+class RV_ImmediateMatchPattern(RV_MatchPattern):
+    def __init__(self, value):
+        RV_MatchPattern.__init__(self, "imm")
+        self.value = value
+
+    def dump(self, verbose=True):
+        if verbose:
+            return "%s %x" % (self.tag, self.value)
+        else:
+            return "%s" % self.tag
+
+
 LOAD_PATTERN = SequentialPattern(
-    [OpcodePattern("opc"), RVRegisterPattern_Int("dst"), RVAddressPattern_Std("addr")],
+    [OpcodePattern("opc"), RVRegisterPattern_Int("dst"),
+     RVAddressPattern_Std("addr")],
     lambda result:
         Instruction(result["opc"],
                     use_list=(result["addr"].base + result["addr"].offset),
                     def_list=result["dst"],
-                    dump_pattern=lambda color_map, use_list, def_list: "{} {}, {}({})".format(result["opc"], def_list[0].instanciate(color_map), use_list[1].instanciate(color_map), use_list[0].instanciate(color_map)))
-)
+                    dump_pattern=loadDumpPattern(result)))
+
+STORE_PATTERN = SequentialPattern(
+    [OpcodePattern("opc"),
+     RVRegisterPattern_Int("src"),
+     RVAddressPattern_Std("addr")],
+    lambda result:
+        Instruction(result["opc"],
+                    use_list=(result["src"] + result["addr"].base + result["addr"].offset),
+                    dump_pattern=storeDumpPattern(result)))
+
 STD_2OP_PATTERN = SequentialPattern(
-        [OpcodePattern("opc"), RVRegisterPattern_Int("dst"), RVRegisterPattern_Int("lhs"), RVRegisterPattern_Int("rhs")],
+        [OpcodePattern("opc"), RVRegisterPattern_Int("dst"),
+         RVRegisterPattern_Int("lhs"), RVRegisterPattern_Int("rhs")],
         lambda result:
             Instruction(result["opc"],
                         use_list=(result["lhs"] + result["rhs"]),
                         def_list=result["dst"],
-                        dump_pattern=lambda color_map, use_list, def_list: "{} {}, {}, {}".format(result["opc"], def_list[0].instanciate(color_map), use_list[0].instanciate(color_map), use_list[1].instanciate(color_map)))
-    )
+                        dump_pattern=std2opDumpPattern(result)))
+
 STD_1OP_1IMM_PATTERN = SequentialPattern(
-        [OpcodePattern("opc"), RVRegisterPattern_Int("dst"), RVRegisterPattern_Int("op"), ImmediatePattern("imm")],
+        [OpcodePattern("opc"), RVRegisterPattern_Int("dst"),
+         RVRegisterPattern_Int("op"), ImmediatePattern("imm")],
         lambda result:
             Instruction(result["opc"],
-                        match_pattern=KV3_ImmediateMatchPattern(result["imm"].value),
+                        match_pattern=RV_ImmediateMatchPattern(result["imm"].value),
                         use_list=(result["op"]),
                         def_list=result["dst"],
                         dump_pattern=lambda color_map, use_list, def_list:
@@ -113,25 +168,36 @@ GOTO_PATTERN = SequentialPattern(
     )
 
 RV32_INSN_PATTERN_MATCH = {
+    # load and store instructions
     "lb":   LOAD_PATTERN,
     "lh":   LOAD_PATTERN,
     "lw":   LOAD_PATTERN,
-
     "lbu":   LOAD_PATTERN,
     "lhu":   LOAD_PATTERN,
-    "lwu":   LOAD_PATTERN,
+    "sb":   STORE_PATTERN,
+    "sh":   STORE_PATTERN,
+    "sw":   STORE_PATTERN,
 
+    # arithmetic instructions
     "add":  STD_2OP_PATTERN,
     "addi":  STD_1OP_1IMM_PATTERN,
-
     "sub":  STD_2OP_PATTERN,
 
+    # logic instructions
     "and":  STD_2OP_PATTERN,
     "andi":  STD_1OP_1IMM_PATTERN,
     "or":  STD_2OP_PATTERN,
     "ori":  STD_1OP_1IMM_PATTERN,
     "xor":  STD_2OP_PATTERN,
     "xori":  STD_1OP_1IMM_PATTERN,
+
+    # shift instructions
+    "sll":  STD_2OP_PATTERN,
+    "slli":  STD_1OP_1IMM_PATTERN,
+    "sra":  STD_2OP_PATTERN,
+    "srai":  STD_1OP_1IMM_PATTERN,
+    "srl":  STD_2OP_PATTERN,
+    "srli":  STD_1OP_1IMM_PATTERN,
 }
 
 class RV32(Architecture):
