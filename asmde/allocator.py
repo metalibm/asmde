@@ -252,6 +252,9 @@ class Architecture:
     def get_empty_liverange_map(self):
         return LiveRangeMap(self.reg_pool.keys())
 
+    def getPhyRegPatternList(self):
+        return []
+
     def hasBundle(self):
         return False
 
