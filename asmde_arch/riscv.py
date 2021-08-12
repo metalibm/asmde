@@ -1,3 +1,5 @@
+import re
+
 from asmde.lexer import Lexem
 
 from asmde.allocator import (
@@ -95,7 +97,7 @@ def storeDumpPattern(parseResult):
 
 def std2opDumpPattern(parseResult):
     def dump(color_map, use_list, def_list):
-        return "{} {}, {}({})".format(parseResult["opc"],
+        return "{} {}, {}, {}".format(parseResult["opc"],
                                       def_list[0].instanciate(color_map),
                                       use_list[0].instanciate(color_map),
                                       use_list[1].instanciate(color_map))
@@ -161,11 +163,51 @@ STD_1OP_1IMM_PATTERN = SequentialPattern(
                                                     use_list[0].instanciate(color_map),
                                                     result["imm"])))
 
-GOTO_PATTERN = SequentialPattern(
-        [OpcodePattern("opc"), LabelPattern("dst")],
+STD_ZEROOP_1IMM_PATTERN = SequentialPattern(
+        [OpcodePattern("opc"), RVRegisterPattern_Int("dst"),
+         ImmediatePattern("imm")],
+        lambda result:
+            Instruction(result["opc"],
+                        match_pattern=RV_ImmediateMatchPattern(result["imm"].value),
+                        use_list=[],
+                        def_list=result["dst"],
+                        dump_pattern=lambda color_map, use_list, def_list:
+                            "{} {}, {}".format(result["opc"],
+                                               def_list[0].instanciate(color_map),
+                                               result["imm"])))
+class FenceSpecifierPattern(Pattern):
+    def __init__(self, tag="spec"):
+        Pattern.__init__(self, tag)
+
+    def parse(self, arch, lexem_list):
+        if len(lexem_list) == 0:
+            return None
+        else:
+            head, lexem_list = lexem_list[0], lexem_list[1:]
+            if (not isinstance(head, Lexem)):
+                return None
+            opcode = head.value
+            if re.fullmatch("[iorw]+", opcode):
+                return opcode, lexem_list
+            return None
+
+FENCE_PATTERN = SequentialPattern([OpcodePattern("opc"),
+                                   FenceSpecifierPattern("pred"),
+                                   FenceSpecifierPattern("succ")],
+                                   lambda result: Instruction(result["opc"], dump_pattern=lambda c,u,d: "{} {}, {}".format(result["opc"], result["pred"], result["succ"])))
+
+ZEROOP_PATTERN = SequentialPattern([OpcodePattern("opc")],
+                                   lambda result: Instruction(result["opc"], dump_pattern=lambda c,u,d: result["opc"]))
+
+COND_BRANCH_PATTERN = SequentialPattern(
+        [OpcodePattern("opc"), RVRegisterPattern_Int("src1"),
+         RVRegisterPattern_Int("src2"), LabelPattern("dst")],
         lambda result: Instruction(result["opc"], is_jump=True,
-                                   dump_pattern=lambda color_map, use_list, def_list: "goto {}".format(use_list["dst"]))
-    )
+                                   use_list=(result["src1"] + result["src2"]),
+                                   jump_label=result["dst"],
+                                   dump_pattern=lambda color_map, use_list, def_list:
+                                        "{} {}, {}, {}".format(result["opc"], use_list[0].instanciate(color_map), use_list[1].instanciate(color_map), result["dst"])
+                                    ))
 
 RV32_INSN_PATTERN_MATCH = {
     # load and store instructions
@@ -183,6 +225,15 @@ RV32_INSN_PATTERN_MATCH = {
     "addi":  STD_1OP_1IMM_PATTERN,
     "sub":  STD_2OP_PATTERN,
 
+    "lui":  STD_ZEROOP_1IMM_PATTERN,
+    "auipc":  STD_ZEROOP_1IMM_PATTERN,
+
+    # arithmetic instructions
+    "slt":  STD_2OP_PATTERN,
+    "sltu":  STD_2OP_PATTERN,
+    "slti":  STD_1OP_1IMM_PATTERN,
+    "sltiu":  STD_1OP_1IMM_PATTERN,
+
     # logic instructions
     "and":  STD_2OP_PATTERN,
     "andi":  STD_1OP_1IMM_PATTERN,
@@ -198,6 +249,23 @@ RV32_INSN_PATTERN_MATCH = {
     "srai":  STD_1OP_1IMM_PATTERN,
     "srl":  STD_2OP_PATTERN,
     "srli":  STD_1OP_1IMM_PATTERN,
+
+    "fence": FENCE_PATTERN,
+
+    "ebreak": ZEROOP_PATTERN,
+    "ecall": ZEROOP_PATTERN,
+
+    # control flow
+    "jalr":  STD_1OP_1IMM_PATTERN,
+    "jal":  STD_ZEROOP_1IMM_PATTERN,
+    # branch
+    "beq": COND_BRANCH_PATTERN,
+    "bne": COND_BRANCH_PATTERN,
+    "blt": COND_BRANCH_PATTERN,
+    "bge": COND_BRANCH_PATTERN,
+    "bltu": COND_BRANCH_PATTERN,
+    "bgeu": COND_BRANCH_PATTERN,
+
 }
 
 class RV32(Architecture):
