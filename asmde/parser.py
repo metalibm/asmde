@@ -414,7 +414,7 @@ class AsmParser:
         elif isinstance(head, CommentHeadLexem):
             pass
         elif isinstance(head, Lexem):
-            if isinstance(lexem_list[1], LabelEndLexem):
+            if len(lexem_list) > 1 and isinstance(lexem_list[1], LabelEndLexem):
                 if len(self.ongoing_bundle) != 0:
                     print("Error: label can not be inserted in the middle of a bundle @ {}".format(dbg_object))
                     sys.exit(1)
@@ -441,7 +441,7 @@ class AsmParser:
                     # succ = self.program.bb_label_map[insn_object.use_list[0]]
                     # TODO/FIXME jump bb label should be extract with method
                     #            and not directly from index 0 of use_list
-                    succ = self.program.get_bb_by_label(insn_object.use_list[0])
+                    succ = self.program.get_bb_by_label(insn_object.jump_label)
                     self.program.current_bb.add_successor(succ)
                     succ.add_predecessor(self.program.current_bb)
                 if not self.arch.hasBundle():
@@ -512,7 +512,7 @@ class AsmParser:
                     # succ = self.program.bb_label_map[insn_object.use_list[0]]
                     # TODO/FIXME jump bb label should be extract with method
                     #            and not directly from index 0 of use_list
-                    succ = self.program.get_bb_by_label(insn_object.use_list[0])
+                    succ = self.program.get_bb_by_label(insn_object.jump_label)
                     self.program.current_bb.add_successor(succ)
                     succ.add_predecessor(self.program.current_bb)
                 # in objdump file, a instruction line may be ended by a bundle separator
@@ -636,7 +636,7 @@ class AsmParser:
                 # succ = self.program.bb_label_map[insn_object.use_list[0]]
                 # TODO/FIXME jump bb label should be extract with method
                 #            and not directly from index 0 of use_list
-                succ = self.program.get_bb_by_label(insn_object.use_list[0])
+                succ = self.program.get_bb_by_label(insn_object.jump_label)
                 self.program.current_bb.add_successor(succ)
                 succ.add_predecessor(self.program.current_bb)
             # in objdump file, a instruction line may be ended by a bundle separator

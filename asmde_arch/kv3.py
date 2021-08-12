@@ -376,6 +376,7 @@ GOTO_PATTERN = SequentialPattern(
         [OpcodePattern("opc"), LabelPattern("dst")],
         lambda result: Instruction(result["opc"], is_jump=True,
                                    use_list=(result["dst"]),
+                                   jump_label=result["dst"],
                                    dump_pattern=lambda color_map, use_list, def_list: "goto {}".format(use_list["dst"]))
     )
 
@@ -383,6 +384,7 @@ BRANCH_PATTERN = SequentialPattern(
         [OpcodePattern("opc", match_predicate=True), RegisterPattern_Std("cond"), LabelPattern("dst")],
         lambda result: Instruction(result["opc"], is_jump=True,
                                    use_list=(result["cond"]),
+                                   jump_label=result["dst"],
                                    dump_pattern=lambda color_map, use_list, def_list:
                                         "{} {} ? {}".format(result["opc"], use_list[0].instanciate(color_map), use_list["dst"])
                                     ))
