@@ -22,7 +22,22 @@ class RVRegister(Register):
         """ Integer register """
         name = "Int"
         prefix = ""
-        reg_prefix = "a"
+        reg_prefix = "x"
+        @classmethod
+        def aliasResolution(cls, spec, index):
+            isAlias = spec != "x"
+            ALIAS_RESOLUTION_MAP = {
+                "x": lambda xi: xi,
+                "ra": lambda _: 1,
+                "sp": lambda _: 2,
+                "gp": lambda _: 3,
+                "tp": lambda _: 4,
+                "t": lambda ti: ti + 5 if ti <= 2 else ti + 25,
+                "fp": lambda _: 8,
+                "s": lambda si: {[(0, 8), (1, 9)] + [(i, i+16) for i in xrange(2, 12)]},
+                "a": lambda ai: ai + 10,
+            }
+            return isAlias, ALIAS_RESOLUTION_MAP[spec](index)
     class FPReg(Register.RegClass):
         """ Floating-point register """
         name = "Fp"
@@ -36,9 +51,19 @@ class VirtualRegisterPattern_Int(VirtualRegisterPattern_SingleReg):
     VIRT_REG_DESCRIPTOR = "I"
 class PhysicalRegisterPattern_Int(PhysicalRegisterPattern):
     """ RISC-V Integer Physical register """
-    REG_PATTERN = "(a[0-9]+)"#{1,4}"
+    REG_PATTERN = "a[0-9]|zero|ra|sp|gp|tp|t[0-9]+|fp|s[0-9]+|x[0-9]+"#{1,4}"
+    REG_SPLIT_PATTERN = "(?P<spec>a|s|t|x|zero|ra|sp|gp|tp|fp)(?P<index>[0-9]*)"
     REG_CLASS = RVRegister.IntReg
     REG_LEXEM = Lexem
+
+    @classmethod
+    def splitSpecIndex(cls, s):
+        """ split string @p s into specifier and index
+            return a 3-uple (isAlias, spec, index) """
+        match = re.match(cls.REG_SPLIT_PATTERN, s)
+        spec = match.group("spec")
+        index = int(match.group("index"))
+        return spec, index
 
 class VirtualRegisterPattern_Fp(VirtualRegisterPattern_SingleReg):
     """ RISC-V Floating-Point Virtual register """

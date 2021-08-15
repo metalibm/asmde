@@ -16,6 +16,10 @@ class Register:
         def get_single_virt_reg_repr(reg_class, virt_reg):
             """ build a string representation for a single virtual register """
             return reg_class.prefix + reg_class.reg_prefix + "<{}>".format(virt_reg.name)
+        @classmethod
+        def get_alias_phy_reg_repr(reg_class, alias_reg):
+            """ build a string representation for a single alias register """
+            return reg_class.prefix + alias_reg.aliasSpec + str(alias_reg.aliasIndex)
     class Std(RegClass):
         name = "Std"
         prefix = "$"
@@ -36,6 +40,11 @@ class Register:
         """ Predicate indicating if register belongs to a special/system
             register file """
         return False
+    @property
+    def baseReg(self):
+        """ return the corresponding underlying base register.
+             This is used to share a single register object between aliases """
+        return self
 
 
 class MultiArchRegister:
@@ -65,6 +74,23 @@ class PhysicalRegister(Register):
 
     def instanciate(self, color_map):
         return self
+
+
+class PhysicalRegisterAlias(PhysicalRegister):
+    """ Alias / secundary name for a physical register """
+    def __init__(self, physReg, aliasIndex, aliasSpec, reg_class):
+        PhysicalRegister.__init__(self, physReg.index, reg_class)
+        self.physReg = physReg
+        self.aliasIndex = aliasIndex
+        self.aliasSpec = aliasSpec
+
+    def __repr__(self):
+        return self.reg_class.get_alias_phy_reg_repr(self)
+
+
+    @property
+    def baseReg(self):
+        return self.physReg
 
 class SpecialRegister(Register):
     """ Physical register """
@@ -198,11 +224,21 @@ class RegFile:
         self.physical_pool = dict((i, self.description.reg_ctor(i, description.reg_class)) for i in range(self.description.num_phys_reg))
         self.virtual_pool = {}
 
-    def get_unique_phys_reg_object(self, index):
-        if index > self.description.num_phys_reg:
+    def get_phys_index(self, index, spec=None):
+        """ translate an index and a specifier into an actual physical index
+            (e.g. RV32I "t, 0 -> (x)5"""
+        return index
+
+    def get_unique_phys_reg_object(self, index, spec=None):
+        isAlias, phys_index = self.description.reg_class.aliasResolution(spec, index)
+        if phys_index > self.description.num_phys_reg:
             print("regfile for class {} contains only {} register(s), request for index: {}".format(self.description.reg_class.name, self.description.num_phys_reg, index))
             raise Exception()
-        return self.physical_pool[index]
+        physReg = self.physical_pool[phys_index]
+        if isAlias:
+            return PhysicalRegisterAlias(physReg, index, spec, self.description.reg_class)
+        else:
+            return physReg
 
     def get_unique_virt_reg_object(self, var_name, reg_constraint=no_constraint):
         if not var_name in self.virtual_pool:
@@ -240,8 +276,8 @@ class Architecture:
     def get_max_register_index_by_class(self, reg_class):
         return self.reg_pool[reg_class].get_max_phys_register_index()
 
-    def get_unique_phys_reg_object(self, index, reg_class):
-        return self.reg_pool[reg_class].get_unique_phys_reg_object(index)
+    def get_unique_phys_reg_object(self, index, reg_class, spec=None):
+        return self.reg_pool[reg_class].get_unique_phys_reg_object(index, spec=spec)
 
     def get_special_reg_object(self, tag, reg_class=Register.Special):
         assert reg_class is Register.Special
@@ -547,9 +583,11 @@ class RegisterAssignator:
             # set of already defined variables
             already_def_set = set()
             for index, bundle in enumerate(bb.bundle_list):
-                for reg in bundle.use_list:
+                for regObj in bundle.use_list:
                     # discard non register element (e.g. ImmediateValue)
-                    if not isinstance(reg, Register): continue
+                    if not isinstance(regObj, Register): continue
+                    # register alias disambiguation
+                    reg = regObj.baseReg
                     if not reg in use_list: use_list[reg] = []
                     use_list[reg].append(VarUse((bb, index), reg, ))
                     if not reg in already_def_set:
@@ -557,9 +595,11 @@ class RegisterAssignator:
                         # defined in the BB, it must be alive at BB entry
                         var_gens[bb].add(reg)
 
-                for reg in bundle.def_list:
+                for regObj in bundle.def_list:
                     # discard non register element (e.g. ImmediateValue)
-                    if not isinstance(reg, Register): continue
+                    if not isinstance(regObj, Register): continue
+                    # register alias disambiguation
+                    reg = regObj.baseReg
                     if not reg in def_list: def_list[reg] = []
                     var_def = VarDef((bb, index), reg)
                     def_list[reg].append(var_def)
@@ -606,15 +646,19 @@ class RegisterAssignator:
             # iterating over bundle in BB (in program order)
             for index, bundle in enumerate(bb.bundle_list):
                 for insn in bundle.insn_list:
-                    for reg in insn.use_list:
-                        if not isinstance(reg, Register):
+                    for regObj in insn.use_list:
+                        if not isinstance(regObj, Register):
                             # discard non register element (e.g. ImmediateValue)
                             continue
+                        # alias disambiguation
+                        reg = regObj.baseReg
                         if not reg in liverange_map:
                             liverange_map[reg] = [LiveRange()]
                         # we update the last inserted LiveRange object in reg's list
                         liverange_map[reg][-1].update_stop((bb_index, index), dbg_object=insn.dbg_object)
-                    for reg in insn.def_list:
+                    for regObj in insn.def_list:
+                        # alias disambiguation
+                        reg = regObj.baseReg
                         if not reg in liverange_map:
                             liverange_map[reg] = []
                         if not(len(liverange_map[reg]) and liverange_map[reg][-1].start == (bb_index, index)): 
