@@ -152,8 +152,21 @@ class PhysicalRegisterPattern(Pattern):
     REG_CLASS = None
 
     @classmethod
-    def get_unique_reg_obj(cls, arch, index):
-        return arch.get_unique_phys_reg_object(index, cls.REG_CLASS)
+    def SUB_REG_PATTERN(cls):
+        cls.REG_PATTERN
+
+    @classmethod
+    def get_unique_reg_obj(cls, arch, index, spec=None):
+        return arch.get_unique_phys_reg_object(index, cls.REG_CLASS, spec=spec)
+
+    @classmethod
+    def splitSpecIndex(cls, s):
+        """ split string @p s into specifier and index
+            return a 3-uple (isAlias, spec, index) """
+        match = re.match("(?P<spec>\D+)(?P<index>\d+)", s)
+        spec = match.group("spec")
+        index = int(match.group("index"))
+        return spec, index
 
     @classmethod
     def parse(PRP_Class, arch, lexem_list):
@@ -166,10 +179,14 @@ class PhysicalRegisterPattern(Pattern):
             # STD_REG_PATTERN = "\$([r][0-9]+){1,4}"
             #ACC_REG_PATTERN = "\$([a][0-9]+){1,4}"
 
-            index_range = [int(index) for index in re.split("\D+", reg_lexem.value) if index != ""]
 
             if re.fullmatch(PRP_Class.REG_PATTERN, reg_lexem.value):
-                register_list = [PRP_Class.get_unique_reg_obj(arch, index) for index in index_range]
+                # extracting specifier and index
+                spec_index_list = [PRP_Class.splitSpecIndex(subreg) for subreg in re.findall(PRP_Class.REG_PATTERN, reg_lexem.value)]
+                print(reg_lexem.value, spec_index_list)
+                #index_range = [PRP_Class.aliasResolution(arch, spec_index(1), spec_index(2)) for spec_index in spec_index_list]
+                # index_range = [int(index) for index in re.split("\D+", reg_lexem.value) if index != ""]
+                register_list = [PRP_Class.get_unique_reg_obj(arch, index, spec) for (spec, index) in spec_index_list]
             #if re.fullmatch(STD_REG_PATTERN, reg_lexem.value):
             #    register_list = [arch.get_unique_phys_reg_object(index, PhysicalRegister.Std) for index in index_range]
             #elif re.fullmatch(ACC_REG_PATTERN, reg_lexem.value):
@@ -539,6 +556,9 @@ class AsmParser:
             register_list = register_list + sub_reg_list
 
         lexem_list = MetaPopOperatorPredicate(")")(lexem_list)
+
+        # register alias disambiguation
+        register_list = [reg.baseReg for reg in register_list]
 
         if macro_name.value == "PREDEFINED":
             print("adding {} to list of pre-defined registers".format(register_list))
