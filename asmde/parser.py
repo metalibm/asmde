@@ -152,10 +152,6 @@ class PhysicalRegisterPattern(Pattern):
     REG_CLASS = None
 
     @classmethod
-    def SUB_REG_PATTERN(cls):
-        cls.REG_PATTERN
-
-    @classmethod
     def get_unique_reg_obj(cls, arch, index, spec=None):
         return arch.get_unique_phys_reg_object(index, cls.REG_CLASS, spec=spec)
 
@@ -182,7 +178,7 @@ class PhysicalRegisterPattern(Pattern):
 
             if re.fullmatch(PRP_Class.REG_PATTERN, reg_lexem.value):
                 # extracting specifier and index
-                spec_index_list = [PRP_Class.splitSpecIndex(subreg) for subreg in re.findall(PRP_Class.REG_PATTERN, reg_lexem.value)]
+                spec_index_list = [PRP_Class.splitSpecIndex(subreg) for subreg in re.findall(PRP_Class.SUB_REG_PATTERN, reg_lexem.value)]
                 print(reg_lexem.value, spec_index_list)
                 #index_range = [PRP_Class.aliasResolution(arch, spec_index(1), spec_index(2)) for spec_index in spec_index_list]
                 # index_range = [int(index) for index in re.split("\D+", reg_lexem.value) if index != ""]
@@ -216,17 +212,20 @@ class PhysicalRegisterPattern_Any(Pattern):
         return None
 
 class PhysicalRegisterPattern_Std(PhysicalRegisterPattern):
-    REG_PATTERN = "\$([r][0-9]+)"#{1,4}"
+    REG_PATTERN = "\$([r][0-9]+)"
+    SUB_REG_PATTERN = "([r][0-9]+)"
     REG_CLASS = PhysicalRegister.Std
 
 
 class PhysicalRegisterPattern_DualStd(PhysicalRegisterPattern):
     REG_PATTERN = "\$([r][0-9]+){2}"
+    SUB_REG_PATTERN = "([r][0-9]+)"
     REG_CLASS = PhysicalRegister.Std
 
 
 class PhysicalRegisterPattern_Acc(PhysicalRegisterPattern):
     REG_PATTERN = "\$([a][0-9]+){1,4}"
+    SUB_REG_PATTERN = "([a][0-9]+)"
     REG_CLASS = PhysicalRegister.Acc
 
 
