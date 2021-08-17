@@ -51,7 +51,8 @@ class VirtualRegisterPattern_Int(VirtualRegisterPattern_SingleReg):
     VIRT_REG_DESCRIPTOR = "I"
 class PhysicalRegisterPattern_Int(PhysicalRegisterPattern):
     """ RISC-V Integer Physical register """
-    REG_PATTERN = "a[0-9]|zero|ra|sp|gp|tp|t[0-9]+|fp|s[0-9]+|x[0-9]+"#{1,4}"
+    REG_PATTERN = "a[0-9]|zero|ra|sp|gp|tp|t[0-9]+|fp|s[0-9]+|x[0-9]+"
+    SUB_REG_PATTERN = "a[0-9]|zero|ra|sp|gp|tp|t[0-9]+|fp|s[0-9]+|x[0-9]+"
     REG_SPLIT_PATTERN = "(?P<spec>a|s|t|x|zero|ra|sp|gp|tp|fp)(?P<index>[0-9]*)"
     REG_CLASS = RVRegister.IntReg
     REG_LEXEM = Lexem
@@ -312,4 +313,4 @@ class RV32(Architecture):
            "A": VirtualRegisterPattern_Int,
            "F": VirtualRegisterPattern_Fp,
        }
-       REG_CLASS_PATTERN_MAP = arch.getVirtualRegClassPatternMap()
+       return REG_CLASS_PATTERN_MAP
