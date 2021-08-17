@@ -4,6 +4,8 @@ from asmde.parser import (
     SequentialPattern,
     OpcodePattern, RegisterPattern_Std, AddressPattern_Std,
     RegisterPattern_DualStd, RegisterPattern_Acc,
+    PhysicalRegisterPattern_Std,
+    PhysicalRegisterPattern_Acc,
     LabelPattern
 )
 
@@ -76,4 +78,15 @@ class DummyArchitecture(Architecture):
 
     def hasBundle(self):
         return True
+
+    def getPhyRegPatternList(self):
+        return [PhysicalRegisterPattern_Std, PhysicalRegisterPattern_Acc]
+
+    def getVirtualRegClassPatternMap(self):
+       REG_CLASS_PATTERN_MAP = {
+           "R": VirtualRegisterPattern_Std,
+           "A": VirtualRegisterPattern_Acc,
+           "D": VirtualRegisterPattern_DualStd,
+       }
+       return REG_CLASS_PATTERN_MAP
 
