@@ -20,6 +20,10 @@ class Register:
         def get_alias_phy_reg_repr(reg_class, alias_reg):
             """ build a string representation for a single alias register """
             return reg_class.prefix + alias_reg.aliasSpec + str(alias_reg.aliasIndex)
+        @classmethod
+        def aliasResolution(cls, spec, index):
+            """ return tuple (isAlias, physical_index) """
+            return False, index
     class Std(RegClass):
         name = "Std"
         prefix = "$"
