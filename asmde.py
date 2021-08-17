@@ -1,4 +1,4 @@
-
+import sys
 import argparse
 
 from asmde.allocator import Program, RegisterAssignator, DebugObject
