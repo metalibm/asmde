@@ -48,7 +48,7 @@ class RVRegister(Register):
 class VirtualRegisterPattern_Int(VirtualRegisterPattern_SingleReg):
     """ RISC-V Integer Virtual register """
     VIRT_REG_CLASS = RVRegister.IntReg
-    VIRT_REG_DESCRIPTOR = "I"
+    VIRT_REG_DESCRIPTOR = "XAI"
 class PhysicalRegisterPattern_Int(PhysicalRegisterPattern):
     """ RISC-V Integer Physical register """
     REG_PATTERN = "a[0-9]|zero|ra|sp|gp|tp|t[0-9]+|fp|s[0-9]+|x[0-9]+"
@@ -235,7 +235,20 @@ COND_BRANCH_PATTERN = SequentialPattern(
                                         "{} {}, {}, {}".format(result["opc"], use_list[0].instanciate(color_map), use_list[1].instanciate(color_map), result["dst"])
                                     ))
 
-RV32_INSN_PATTERN_MATCH = {
+RV32M_INSN_PATTERN_MATCH = {
+    "mul":  STD_2OP_PATTERN,
+
+    "mulh":  STD_2OP_PATTERN,
+    "mulhu":  STD_2OP_PATTERN,
+    "mulhsu":  STD_2OP_PATTERN,
+
+    "div":  STD_2OP_PATTERN,
+    "divu":  STD_2OP_PATTERN,
+    "rem":  STD_2OP_PATTERN,
+    "remu":  STD_2OP_PATTERN,
+}
+
+RV32I_INSN_PATTERN_MATCH = {
     # load and store instructions
     "lb":   LOAD_PATTERN,
     "lh":   LOAD_PATTERN,
@@ -291,7 +304,6 @@ RV32_INSN_PATTERN_MATCH = {
     "bge": COND_BRANCH_PATTERN,
     "bltu": COND_BRANCH_PATTERN,
     "bgeu": COND_BRANCH_PATTERN,
-
 }
 
 class RV32(Architecture):
@@ -301,7 +313,7 @@ class RV32(Architecture):
                 RegFileDescription(RVRegister.IntReg, 32, PhysicalRegister, VirtualRegister),
                 RegFileDescription(RVRegister.FPReg, 32, PhysicalRegister, VirtualRegister)
             ]),
-            RV32_INSN_PATTERN_MATCH
+            dict(list(RV32I_INSN_PATTERN_MATCH.items()) + list(RV32M_INSN_PATTERN_MATCH.items()))
         )
 
     def getPhyRegPatternList(self):
