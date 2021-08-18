@@ -43,6 +43,16 @@ class RVRegister(Register):
         name = "Fp"
         prefix = ""
         reg_prefix = "f"
+        @classmethod
+        def aliasResolution(cls, spec, index):
+            isAlias = spec != "f"
+            ALIAS_RESOLUTION_MAP = {
+                "f": lambda fi: fi,
+                "ft": lambda fti: fti if fti <= 7 else (fti + 20),
+                "fs": lambda fsi: (fsi + 8) if fsi <= 1 else (fsi + 16),
+                "fa": lambda fai: (fai + 10),
+            }
+            return isAlias, ALIAS_RESOLUTION_MAP[spec](index)
 
 
 class VirtualRegisterPattern_Int(VirtualRegisterPattern_SingleReg):
@@ -72,7 +82,9 @@ class VirtualRegisterPattern_Fp(VirtualRegisterPattern_SingleReg):
     VIRT_REG_DESCRIPTOR = "F"
 class PhysicalRegisterPattern_Fp(PhysicalRegisterPattern):
     """ RISC-V Floating-Pooint Physical register """
-    REG_PATTERN = "(f[0-9]+)"#{1,4}"
+    REG_PATTERN = "(f|fs|ft|fa)[0-9]+"
+    SUB_REG_PATTERN = "(f|fs|ft|fa)[0-9]+"
+    REG_SPLIT_PATTERN = "(?P<spec>f|ft|fs|fa)(?P<index>[0-9]+)"
     REG_CLASS = RVRegister.FPReg
     REG_LEXEM = Lexem
 
@@ -84,6 +96,10 @@ class RVOffsetPattern_Std(GenericOffsetPattern):
     """ pattern for address offset """
     OffsetPhysicalRegisterClass = PhysicalRegisterPattern_Int
     OffsetVirtuallRegisterClass = VirtualRegisterPattern_Int
+
+class RVRegisterPattern_FP(RegisterPattern):
+    VIRTUAL_PATTERN_CLASS = VirtualRegisterPattern_Fp
+    PHYSICAL_PATTERN_CLASS = PhysicalRegisterPattern_Fp
 
 class RVAddressPattern_Std(Pattern):
     @staticmethod
@@ -148,23 +164,29 @@ class RV_ImmediateMatchPattern(RV_MatchPattern):
             return "%s" % self.tag
 
 
-LOAD_PATTERN = SequentialPattern(
-    [OpcodePattern("opc"), RVRegisterPattern_Int("dst"),
-     RVAddressPattern_Std("addr")],
-    lambda result:
-        Instruction(result["opc"],
-                    use_list=(result["addr"].base + result["addr"].offset),
-                    def_list=result["dst"],
-                    dump_pattern=loadDumpPattern(result)))
+def LOAD_PATTERN(DstPattern):
+    return SequentialPattern(
+        [OpcodePattern("opc"), DstPattern("dst"),
+         RVAddressPattern_Std("addr")],
+        lambda result:
+            Instruction(result["opc"],
+                        use_list=(result["addr"].base + result["addr"].offset),
+                        def_list=result["dst"],
+                        dump_pattern=loadDumpPattern(result)))
 
-STORE_PATTERN = SequentialPattern(
-    [OpcodePattern("opc"),
-     RVRegisterPattern_Int("src"),
-     RVAddressPattern_Std("addr")],
-    lambda result:
-        Instruction(result["opc"],
-                    use_list=(result["src"] + result["addr"].base + result["addr"].offset),
-                    dump_pattern=storeDumpPattern(result)))
+
+def STORE_PATTERN(SrcPattern):
+    return SequentialPattern(
+        [OpcodePattern("opc"),
+         SrcPattern("src"),
+         RVAddressPattern_Std("addr")],
+        lambda result:
+            Instruction(result["opc"],
+                        use_list=(result["src"] + result["addr"].base + result["addr"].offset),
+                        dump_pattern=storeDumpPattern(result)))
+
+LOAD_INT_PATTERN = LOAD_PATTERN(RVRegisterPattern_Int)
+STORE_INT_PATTERN = STORE_PATTERN(RVRegisterPattern_Int)
 
 STD_2OP_PATTERN = SequentialPattern(
         [OpcodePattern("opc"), RVRegisterPattern_Int("dst"),
@@ -250,14 +272,14 @@ RV32M_INSN_PATTERN_MATCH = {
 
 RV32I_INSN_PATTERN_MATCH = {
     # load and store instructions
-    "lb":   LOAD_PATTERN,
-    "lh":   LOAD_PATTERN,
-    "lw":   LOAD_PATTERN,
-    "lbu":   LOAD_PATTERN,
-    "lhu":   LOAD_PATTERN,
-    "sb":   STORE_PATTERN,
-    "sh":   STORE_PATTERN,
-    "sw":   STORE_PATTERN,
+    "lb":   LOAD_INT_PATTERN,
+    "lh":   LOAD_INT_PATTERN,
+    "lw":   LOAD_INT_PATTERN,
+    "lbu":   LOAD_INT_PATTERN,
+    "lhu":   LOAD_INT_PATTERN,
+    "sb":   STORE_INT_PATTERN,
+    "sh":   STORE_INT_PATTERN,
+    "sw":   STORE_INT_PATTERN,
 
     # arithmetic instructions
     "add":  STD_2OP_PATTERN,
@@ -306,6 +328,72 @@ RV32I_INSN_PATTERN_MATCH = {
     "bgeu": COND_BRANCH_PATTERN,
 }
 
+def FP_OP_PATTERN(DstPattern, OpPatterns):
+    opNum = len(OpPatterns)
+    def dumpPattern(parseResult):
+        def dump(color_map, use_list, def_list):
+            return "{} {}, ".format(parseResult["opc"],
+                                   def_list[0].instanciate(color_map)) + \
+                    ", ".join("{}".format(use_list[i].instanciate(color_map)) for i in xrange(opNum))
+        return dump
+    return SequentialPattern(
+        [OpcodePattern("opc"), RVRegisterPattern_FP("dst")] +
+        [OpPatterns[i]("op%d" % i) for i in range(opNum)],
+        lambda result:
+            Instruction(result["opc"],
+                        use_list=([result["op%d" % i] for i in range(opNum)]),
+                        def_list=result["dst"],
+                        dump_pattern=dumpPattern(result)))
+
+FP_1OP_PATTERN = FP_OP_PATTERN(RVRegisterPattern_FP, [RVRegisterPattern_FP])
+FP_2OP_PATTERN = FP_OP_PATTERN(RVRegisterPattern_FP, [RVRegisterPattern_FP]*2)
+FP_3OP_PATTERN = FP_OP_PATTERN(RVRegisterPattern_FP, [RVRegisterPattern_FP]*3)
+
+LOAD_FP_PATTERN = LOAD_PATTERN(RVRegisterPattern_FP)
+STORE_FP_PATTERN = STORE_PATTERN(RVRegisterPattern_FP)
+
+
+
+RV32F_INSN_PATTERN_MATCH = {
+    "fadd.s": FP_2OP_PATTERN,
+    "fsub.s": FP_2OP_PATTERN,
+    "fmul.s": FP_2OP_PATTERN,
+    "fdiv.s": FP_2OP_PATTERN,
+    "fmin.s": FP_2OP_PATTERN,
+    "fmax.s": FP_2OP_PATTERN,
+
+    "fsqrt.s": FP_1OP_PATTERN,
+    "fcvt.s.d": FP_1OP_PATTERN,
+    "fcvt.d.s": FP_1OP_PATTERN,
+
+    "fmadd.s" : FP_3OP_PATTERN,
+    "fnmadd.s": FP_3OP_PATTERN,
+    "fmsub.s" : FP_3OP_PATTERN,
+    "fnmsub.s": FP_3OP_PATTERN,
+
+    "flw": LOAD_FP_PATTERN,
+    "fsw": STORE_PATTERN,
+
+    "fcvt.s.w": FP_OP_PATTERN(RVRegisterPattern_FP, [RVRegisterPattern_Int]),
+    "fcvt.s.wu": FP_OP_PATTERN(RVRegisterPattern_FP, [RVRegisterPattern_Int]),
+    "fcvt.w.s": FP_OP_PATTERN(RVRegisterPattern_Int, [RVRegisterPattern_FP]),
+    "fcvt.wu.s": FP_OP_PATTERN(RVRegisterPattern_Int, [RVRegisterPattern_FP]),
+
+    "fmv.x.s": FP_OP_PATTERN(RVRegisterPattern_Int, [RVRegisterPattern_FP]),
+    "fmc.s.x": FP_OP_PATTERN(RVRegisterPattern_FP, [RVRegisterPattern_Int]),
+
+    "feq.s": FP_OP_PATTERN(RVRegisterPattern_Int, [RVRegisterPattern_Int]*2),
+    "flt.s": FP_OP_PATTERN(RVRegisterPattern_Int, [RVRegisterPattern_Int]*2),
+    "fle.s": FP_OP_PATTERN(RVRegisterPattern_Int, [RVRegisterPattern_Int]*2),
+
+    "fsgnj.s": FP_OP_PATTERN(RVRegisterPattern_FP, [RVRegisterPattern_FP]),
+    "fsgnjn.s": FP_OP_PATTERN(RVRegisterPattern_FP, [RVRegisterPattern_FP]),
+    "fsgnjx.s": FP_OP_PATTERN(RVRegisterPattern_FP, [RVRegisterPattern_FP]),
+
+    "fclass.s": FP_OP_PATTERN(RVRegisterPattern_Int, [RVRegisterPattern_FP]),
+}
+
+
 class RV32(Architecture):
     def __init__(self):
         Architecture.__init__(self,
@@ -313,7 +401,9 @@ class RV32(Architecture):
                 RegFileDescription(RVRegister.IntReg, 32, PhysicalRegister, VirtualRegister),
                 RegFileDescription(RVRegister.FPReg, 32, PhysicalRegister, VirtualRegister)
             ]),
-            dict(list(RV32I_INSN_PATTERN_MATCH.items()) + list(RV32M_INSN_PATTERN_MATCH.items()))
+            dict(list(RV32I_INSN_PATTERN_MATCH.items()) +
+                 list(RV32M_INSN_PATTERN_MATCH.items()) +
+                 list(RV32F_INSN_PATTERN_MATCH.items()))
         )
 
     def getPhyRegPatternList(self):
