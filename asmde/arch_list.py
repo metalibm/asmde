@@ -9,4 +9,4 @@ ARCH_CTOR_MAP = {
 }
 
 def parse_architecture(arch_str_desc):
-    return ARCH_CTOR_MAP[arch_str_desc]()
+    return ARCH_CTOR_MAP[arch_str_desc]

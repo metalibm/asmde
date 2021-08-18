@@ -4,7 +4,7 @@ import argparse
 from asmde.allocator import Program, RegisterAssignator, DebugObject
 from asmde.parser import AsmParser
 from asmde_arch.dummy import DummyArchitecture
-from asmde.arch_list import parse_architecture
+from asmde.arch_list import parse_architecture, ARCH_CTOR_MAP
 import asmde.lexer as lexer
 
 
@@ -15,12 +15,16 @@ if __name__ == "__main__":
 
     parser.add_argument("--output", action="store", default=None, help="select output file (default stdout)")
     parser.add_argument("--input", action="store", help="select input file")
-    parser.add_argument("--arch", action="store", default=DummyArchitecture(), type=parse_architecture, help="select target architecture")
+    parser.add_argument("--arch", action="store", default=DummyArchitecture,
+                                  type=parse_architecture, help="select target architecture")
 
     args = parser.parse_args()
 
+    # instantiating architecture
+    arch = args.arch()
+
     program = Program()
-    asm_parser = AsmParser(args.arch, program)
+    asm_parser = AsmParser(arch, program)
 
     print("parsing input program")
     with open(args.input, "r") as input_stream:
@@ -42,9 +46,9 @@ if __name__ == "__main__":
     # manage file I/O exception
 
     print("Register Assignation")
-    reg_assignator = RegisterAssignator(args.arch)
+    reg_assignator = RegisterAssignator(arch)
 
-    empty_liverange_map = args.arch.get_empty_liverange_map()
+    empty_liverange_map = arch.get_empty_liverange_map()
 
     #print("Declaring pre-defined registers")
     #empty_liverange_map.populate_pre_defined_list(program)
