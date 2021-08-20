@@ -12,6 +12,7 @@ from asmde.parser import (
     VirtualRegisterPattern_SingleReg, ImmediatePattern,
     PhysicalRegisterPattern, RegisterPattern, GenericOffsetPattern, Pattern,
     MetaPopOperatorPredicate, AddrValue,
+    OptionalPattern,
     LabelPattern
 )
 
@@ -328,17 +329,19 @@ RV32I_INSN_PATTERN_MATCH = {
     "bgeu": COND_BRANCH_PATTERN,
 }
 
-def FP_OP_PATTERN(DstPattern, OpPatterns, match_predicate=True):
+def FP_OP_PATTERN(DstPattern, OpPatterns, match_predicate=True, optRounding=False):
     opNum = len(OpPatterns)
     def dumpPattern(parseResult):
         def dump(color_map, use_list, def_list):
             return "{} {}, ".format(parseResult["opc"],
                                    def_list[0].instanciate(color_map)) + \
-                    ", ".join("{}".format(use_list[i].instanciate(color_map)) for i in range(opNum))
+                    ", ".join("{}".format(use_list[i].instanciate(color_map)) for i in range(opNum)) + \
+                    (", {}".format(parseResult["rnd"]) if "rnd" in parseResult else "")
         return dump
     return SequentialPattern(
         [OpcodePattern("opc", match_predicate=match_predicate), RVRegisterPattern_FP("dst")] +
-        [OpPatterns[i]("op%d" % i) for i in range(opNum)],
+        [OpPatterns[i]("op%d" % i) for i in range(opNum)]
+        + [OptionalPattern(LabelPattern("rnd"))] if optRounding else [],
         lambda result:
             Instruction(result["opc"],
                         use_list=sum([result["op%d" % i] for i in range(opNum)], []),
@@ -349,35 +352,41 @@ FP_1OP_PATTERN = FP_OP_PATTERN(RVRegisterPattern_FP, [RVRegisterPattern_FP])
 FP_2OP_PATTERN = FP_OP_PATTERN(RVRegisterPattern_FP, [RVRegisterPattern_FP]*2)
 FP_3OP_PATTERN = FP_OP_PATTERN(RVRegisterPattern_FP, [RVRegisterPattern_FP]*3)
 
+
+# pattern with optionnal last argument rounding
+FP_1OP_PATTERN_RND = FP_OP_PATTERN(RVRegisterPattern_FP, [RVRegisterPattern_FP], optRounding=True)
+FP_2OP_PATTERN_RND = FP_OP_PATTERN(RVRegisterPattern_FP, [RVRegisterPattern_FP]*2, optRounding=True)
+FP_3OP_PATTERN_RND = FP_OP_PATTERN(RVRegisterPattern_FP, [RVRegisterPattern_FP]*3, optRounding=True)
+
 LOAD_FP_PATTERN = LOAD_PATTERN(RVRegisterPattern_FP)
 STORE_FP_PATTERN = STORE_PATTERN(RVRegisterPattern_FP)
 
 
 
 RV32F_INSN_PATTERN_MATCH = {
-    "fadd.s": FP_2OP_PATTERN,
-    "fsub.s": FP_2OP_PATTERN,
-    "fmul.s": FP_2OP_PATTERN,
-    "fdiv.s": FP_2OP_PATTERN,
-    "fmin.s": FP_2OP_PATTERN,
-    "fmax.s": FP_2OP_PATTERN,
+    "fadd.s": FP_2OP_PATTERN_RND,
+    "fsub.s": FP_2OP_PATTERN_RND,
+    "fmul.s": FP_2OP_PATTERN_RND,
+    "fdiv.s": FP_2OP_PATTERN_RND,
+    "fmin.s": FP_2OP_PATTERN_RND,
+    "fmax.s": FP_2OP_PATTERN_RND,
 
-    "fsqrt.s": FP_1OP_PATTERN,
-    "fcvt.s.d": FP_1OP_PATTERN,
-    "fcvt.d.s": FP_1OP_PATTERN,
+    "fsqrt.s": FP_1OP_PATTERN_RND,
+    "fcvt.s.d": FP_1OP_PATTERN_RND,
+    "fcvt.d.s": FP_1OP_PATTERN_RND,
 
-    "fmadd.s" : FP_3OP_PATTERN,
-    "fnmadd.s": FP_3OP_PATTERN,
-    "fmsub.s" : FP_3OP_PATTERN,
-    "fnmsub.s": FP_3OP_PATTERN,
+    "fmadd.s" : FP_3OP_PATTERN_RND,
+    "fnmadd.s": FP_3OP_PATTERN_RND,
+    "fmsub.s" : FP_3OP_PATTERN_RND,
+    "fnmsub.s": FP_3OP_PATTERN_RND,
 
     "flw": LOAD_FP_PATTERN,
     "fsw": STORE_PATTERN,
 
-    "fcvt.s.w": FP_OP_PATTERN(RVRegisterPattern_FP, [RVRegisterPattern_Int]),
-    "fcvt.s.wu": FP_OP_PATTERN(RVRegisterPattern_FP, [RVRegisterPattern_Int]),
-    "fcvt.w.s": FP_OP_PATTERN(RVRegisterPattern_Int, [RVRegisterPattern_FP]),
-    "fcvt.wu.s": FP_OP_PATTERN(RVRegisterPattern_Int, [RVRegisterPattern_FP]),
+    "fcvt.s.w": FP_OP_PATTERN(RVRegisterPattern_FP, [RVRegisterPattern_Int], optRounding=True),
+    "fcvt.s.wu": FP_OP_PATTERN(RVRegisterPattern_FP, [RVRegisterPattern_Int], optRounding=True),
+    "fcvt.w.s": FP_OP_PATTERN(RVRegisterPattern_Int, [RVRegisterPattern_FP], optRounding=True),
+    "fcvt.wu.s": FP_OP_PATTERN(RVRegisterPattern_Int, [RVRegisterPattern_FP], optRounding=True),
 
     "fmv.x.s": FP_OP_PATTERN(RVRegisterPattern_Int, [RVRegisterPattern_FP]),
     "fmc.s.x": FP_OP_PATTERN(RVRegisterPattern_FP, [RVRegisterPattern_Int]),
@@ -416,3 +425,6 @@ class RV32(Architecture):
            "F": VirtualRegisterPattern_Fp,
        }
        return REG_CLASS_PATTERN_MAP
+
+if __name__ == "__main__":
+    _ = RV32()
