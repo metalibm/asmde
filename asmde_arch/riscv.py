@@ -34,7 +34,7 @@ class RVRegister(Register):
                 "tp": lambda _: 4,
                 "t": lambda ti: ti + 5 if ti <= 2 else ti + 25,
                 "fp": lambda _: 8,
-                "s": lambda si: {[(0, 8), (1, 9)] + [(i, i+16) for i in xrange(2, 12)]},
+                "s": lambda si: {[(0, 8), (1, 9)] + [(i, i+16) for i in range(2, 12)]},
                 "a": lambda ai: ai + 10,
             }
             return isAlias, ALIAS_RESOLUTION_MAP[spec](index)
@@ -83,7 +83,7 @@ class VirtualRegisterPattern_Fp(VirtualRegisterPattern_SingleReg):
 class PhysicalRegisterPattern_Fp(PhysicalRegisterPattern):
     """ RISC-V Floating-Pooint Physical register """
     REG_PATTERN = "(f|fs|ft|fa)[0-9]+"
-    SUB_REG_PATTERN = "(f|fs|ft|fa)[0-9]+"
+    SUB_REG_PATTERN = "f[sta]{0,1}[0-9]+"
     REG_SPLIT_PATTERN = "(?P<spec>f|ft|fs|fa)(?P<index>[0-9]+)"
     REG_CLASS = RVRegister.FPReg
     REG_LEXEM = Lexem
@@ -328,20 +328,20 @@ RV32I_INSN_PATTERN_MATCH = {
     "bgeu": COND_BRANCH_PATTERN,
 }
 
-def FP_OP_PATTERN(DstPattern, OpPatterns):
+def FP_OP_PATTERN(DstPattern, OpPatterns, match_predicate=True):
     opNum = len(OpPatterns)
     def dumpPattern(parseResult):
         def dump(color_map, use_list, def_list):
             return "{} {}, ".format(parseResult["opc"],
                                    def_list[0].instanciate(color_map)) + \
-                    ", ".join("{}".format(use_list[i].instanciate(color_map)) for i in xrange(opNum))
+                    ", ".join("{}".format(use_list[i].instanciate(color_map)) for i in range(opNum))
         return dump
     return SequentialPattern(
-        [OpcodePattern("opc"), RVRegisterPattern_FP("dst")] +
+        [OpcodePattern("opc", match_predicate=match_predicate), RVRegisterPattern_FP("dst")] +
         [OpPatterns[i]("op%d" % i) for i in range(opNum)],
         lambda result:
             Instruction(result["opc"],
-                        use_list=([result["op%d" % i] for i in range(opNum)]),
+                        use_list=sum([result["op%d" % i] for i in range(opNum)], []),
                         def_list=result["dst"],
                         dump_pattern=dumpPattern(result)))
 
@@ -407,7 +407,7 @@ class RV32(Architecture):
         )
 
     def getPhyRegPatternList(self):
-        return [PhysicalRegisterPattern_Int]
+        return [PhysicalRegisterPattern_Int, PhysicalRegisterPattern_Fp]
 
     def getVirtualRegClassPatternMap(self):
        REG_CLASS_PATTERN_MAP = {
