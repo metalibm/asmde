@@ -82,7 +82,7 @@ class VirtualRegisterPattern(Pattern):
         lexem_list = lexem_list[1:]
         reg_type = virtual_register_type_lexem.value
 
-        if not isinstance(virtual_register_type_lexem, Lexem) or not reg_type in VRP_Class.VIRT_REG_DESCRIPTOR:#"RDQOABCD":
+        if not isinstance(virtual_register_type_lexem, Lexem) or not reg_type in VRP_Class.VIRT_REG_DESCRIPTOR:
             # fail to match
             return None
 
@@ -159,9 +159,13 @@ class PhysicalRegisterPattern(Pattern):
     def splitSpecIndex(cls, s):
         """ split string @p s into specifier and index
             return a 3-uple (isAlias, spec, index) """
-        match = re.match("(?P<spec>\D+)(?P<index>\d+)", s)
-        spec = match.group("spec")
-        index = int(match.group("index"))
+        try:
+            match = re.match("(?P<spec>\D+)(?P<index>\d+)", s)
+            spec = match.group("spec")
+            index = int(match.group("index"))
+        except:
+            print("failed to match regsiter pattern {} with {}".format(s, cls))
+            raise
         return spec, index
 
     @classmethod
@@ -694,7 +698,10 @@ class AsmParser:
             - the list (most likely a single element) of virtual register
               encoded in lexem
             - a list of remaining lexems """
-        reg_list, lexem_list = VirtualRegisterPattern_Any.parse(self.arch, lexem_list)
+        match = VirtualRegisterPattern_Any.parse(self.arch, lexem_list)
+        if match is None:
+            return match
+        reg_list, lexem_list = match
         return reg_list, lexem_list
 
     def parse_register(self, lexem_list):
