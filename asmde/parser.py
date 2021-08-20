@@ -437,18 +437,31 @@ class AsmParser:
                 self.program.add_label(head.value)
 
             else:
-                if head.value in self.arch.insn_patterns:
-                    insn_pattern = self.arch.insn_patterns[head.value]
-                    insn_match = insn_pattern.match(self.arch, lexem_list)
-                    if insn_match is None:
-                        print("failed to match {} in {}".format(head.value, lexem_list))
-                        sys.exit(1)
-                    else:
-                        insn_object, lexem_list = insn_match
-
+                mnemonic = head.value
+                if mnemonic in self.arch.insn_patterns:
+                    insn_pattern = self.arch.insn_patterns[mnemonic]
                 else:
-                    print("unable to parse {} @ {}".format(lexem_list, dbg_object))
-                    raise NotImplementedError
+                    # looking for compound instruction with specified
+                    sub_lexem_list = lexem_list[1:]
+                    while isinstance(sub_lexem_list[0], OperatorLexem) and sub_lexem_list[0].value == ".":
+                        assert isinstance(sub_lexem_list[1], Lexem)
+                        predicate = sub_lexem_list[1].value
+                        mnemonic = "{}.{}".format(mnemonic, predicate)
+                        sub_lexem_list = sub_lexem_list[2:]
+
+                    if mnemonic in self.arch.insn_patterns:
+                        insn_pattern = self.arch.insn_patterns[mnemonic]
+                    else:
+                        print("unable to parse {} @ {}".format(lexem_list, dbg_object))
+                        raise NotImplementedError
+
+                insn_match = insn_pattern.match(self.arch, lexem_list)
+                if insn_match is None:
+                    print("failed to match {} in {}".format(mnemonic, lexem_list))
+                    sys.exit(1)
+                else:
+                    insn_object, lexem_list = insn_match
+
                 # adding meta information
                 insn_object.dbg_object = dbg_object
                 # registering instruction
