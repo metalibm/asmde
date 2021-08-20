@@ -396,6 +396,24 @@ class SequentialPattern:
 
         return self.result_builder(match_result), lexem_list
 
+class OptionalPattern:
+    """ Optional pattern, does not return an error
+        if the lexem_list is not matched, rather
+        returns None, lexem_list (unmodified) """
+    def __init__(self, opt_pattern):
+        self.opt_pattern = opt_pattern
+
+    def parse(self, arch, lexem_list):
+        result = self.opt_pattern.parse(arch, lexem_list)
+        if result is None:
+            return None, lexem_list
+        value, lexem_list = result
+        return value, lexem_list
+
+    @property
+    def tag(self):
+        return self.opt_pattern.tag
+
 
 class DisjonctivePattern:
     """ match one of the element in the list """
