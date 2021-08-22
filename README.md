@@ -47,4 +47,10 @@ List of supported macros:
 - PREDEFINED <list or registers>   add the registers in the list to the list of registers defined before program starts (e.g. function arguments)
 - POSTUSED   <list of registers>   add the registers in the list to the list of registers usedafter program ends (e.g. function results)
 
+# Supported architecture(s)
+
+- RISC-V RV32I, RV32M, RV32F (work in progress)
+- Kalray's KV3 VLIW ISA
+- Dummy architecture
+
 # Extending asmde
