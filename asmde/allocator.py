@@ -382,9 +382,18 @@ class BasicBlock:
             print("[WARNING] duplicate index for bb {}/{} in BasicBlock.merge_in".format(self, merged_bb)) 
         self.index = self.index or merged_bb.index
 
+class Directive:
+    """ Assembly directive container """
+    def __init__(self, value):
+        self.value = value
+
+    def dump(self, arch, color_map):
+        return self.value
 
 class Program:
     def __init__(self, pre_defined_list=None, post_used_list=None, empty=False):
+        # program sequence
+        self.program_seq = []
         self.pre_defined_list = [] if pre_defined_list is None else pre_defined_list
         self.post_used_list = [] if post_used_list is None else post_used_list
         self.bb_list = []
@@ -406,6 +415,11 @@ class Program:
         # self.bundle_list.append(bundle)
 
     def add_bb(self, label="undef"):
+    def add_program_element(self, elt):
+        self.program_seq.append(elt)
+
+    def add_directive(self, directive):
+        self.program_seq.append(directive)
         """ add a new BasicBlock without modifying self.current_bb reference """
         new_bb = BasicBlock(label)
         self.bb_list.append(new_bb)

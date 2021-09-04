@@ -24,6 +24,7 @@ from asmde.allocator import (
     BasicBlock,
     even_indexed_register,
     odd_indexed_register,
+    Directive,
 )
 
 
@@ -439,7 +440,7 @@ class AsmParser:
         # enable debug/info messages
         self.verbose = verbose
 
-    def parse_asm_line(self, lexem_list, dbg_object):
+    def parse_asm_line(self, lexem_list, dbg_object, src_line=""):
         if not len(lexem_list): return
         head = lexem_list[0]
         if isinstance(head, BundleSeparatorLexem):
@@ -450,6 +451,13 @@ class AsmParser:
             self.parse_macro(lexem_list[1:], dbg_object)
         elif isinstance(head, CommentHeadLexem):
             pass
+        elif isinstance(head, OperatorLexem) and head.value == ".":
+            # label starting with '.': ".label:"
+            if len(lexem_list) == 3 and isinstance(lexem_list[1], Lexem) and isinstance(lexem_list[2], LabelEndLexem):
+                self.program.add_label("." + lexem_list[1].value)
+            else:
+                # assume to be a directive
+                self.program.add_directive(Directive(src_line))
         elif isinstance(head, Lexem):
             if len(lexem_list) > 1 and isinstance(lexem_list[1], LabelEndLexem):
                 if len(self.ongoing_bundle) != 0:
