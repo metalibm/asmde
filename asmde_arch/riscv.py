@@ -227,6 +227,16 @@ STD_ZEROOP_1IMM_PATTERN = SequentialPattern(
                             "{} {}, {}".format(result["opc"],
                                                def_list[0].instanciate(color_map),
                                                result["imm"])))
+
+STD_ZEROOP = SequentialPattern(
+        [OpcodePattern("opc")],
+        lambda result:
+            Instruction(result["opc"],
+                        use_list=[],
+                        def_list=[],
+                        dump_pattern=lambda color_map, use_list, def_list:
+                            "{}".format(result["opc"])))
+
 class FenceSpecifierPattern(Pattern):
     def __init__(self, tag="spec"):
         Pattern.__init__(self, tag)
@@ -323,6 +333,7 @@ RV32I_INSN_PATTERN_MATCH = {
     # control flow
     "jalr":  STD_1OP_1IMM_PATTERN,
     "jal":  STD_ZEROOP_1IMM_PATTERN,
+    "ret": STD_ZEROOP,
     # branch
     "beq": COND_BRANCH_PATTERN,
     "bne": COND_BRANCH_PATTERN,
