@@ -103,10 +103,13 @@ def generate_line_lexems(s, verbose=False):
         if lexem_match is None:
             if DiscardedSymbol.match(sub_word):
                 # discard
+                if verbose:
+                    print("discarding '{}' ".format(sub_word))
                 pass
-            elif verbose:
+            else:
                 lexem_list.append(UnmatchedLexem(sub_word))
-                print("could not match lexically '{}' ".format(sub_word))
+                if verbose:
+                    print("could not match lexically '{}' ".format(sub_word))
 
     return lexem_list
 

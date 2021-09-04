@@ -431,7 +431,7 @@ class DisjonctivePattern:
 
 
 class AsmParser:
-    def __init__(self, arch, program):
+    def __init__(self, arch, program, verbose=False):
         self.ongoing_bundle = Bundle()
         self.program = program
         self.arch = arch
@@ -439,6 +439,8 @@ class AsmParser:
         # assembly traces
         self.last_timestamp = None
         self.last_program_counter = None
+        # enable debug/info messages
+        self.verbose = verbose
 
     def parse_asm_line(self, lexem_list, dbg_object):
         if not len(lexem_list): return
@@ -595,11 +597,11 @@ class AsmParser:
         register_list = [reg.baseReg for reg in register_list]
 
         if macro_name.value == "PREDEFINED":
-            print("adding {} to list of pre-defined registers".format(register_list))
+            if self.verbose: print("adding {} to list of pre-defined registers".format(register_list))
             self.program.pre_defined_list += register_list
 
         elif macro_name.value == "POSTUSED":
-            print("adding {} to list of post-used registers".format(register_list))
+            if self.verbose: print("adding {} to list of post-used registers".format(register_list))
             self.program.post_used_list += register_list
 
         else:

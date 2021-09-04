@@ -578,7 +578,7 @@ class RegisterAssignator:
     def process_program(self, bundle_list):
         pass
 
-    def generate_use_def_lists(self, program):
+    def generate_use_def_lists(self, program, verbose=False):
         """ List variable use and defs in program """
         use_list, def_list = {}, {}
         var_gens = collections.defaultdict(set)
@@ -613,6 +613,13 @@ class RegisterAssignator:
 
         var_ins = collections.defaultdict(set)
         var_out = collections.defaultdict(set)
+
+        if verbose:
+            for reg in use_list:
+                print("use_list {}: {}".format(reg, use_list[reg]))
+            for reg in def_list:
+                print("def_list {}: {}".format(reg, def_list[reg]))
+            print("post_used_list: {}".format(program.post_used_list))
         # adding post used list into sink BB
         for reg in program.post_used_list:
             var_ins[program.sink_bb].add(reg)
@@ -622,6 +629,7 @@ class RegisterAssignator:
         worklist = [bb for bb in program.sink_bb.preds] + [bb for bb in program.bb_list] + [program.source_bb]
         while worklist != []:
             bb = worklist.pop(0)
+            if verbose: print("processing bb: {}, succs: {}".format(bb, bb.succs))
             if bb is program.sink_bb:
                 # discard sink_bb which has no successor
                 continue
@@ -634,6 +642,13 @@ class RegisterAssignator:
                 for pred in bb.preds:
                     worklist.append(pred)
             var_ins[bb] = ins_bb
+        if verbose:
+            for bb in var_gens:
+                print("var_gens for {}: ".format(bb, var_gens[bb]))
+            for bb in var_ins:
+                print("var_ins for {}: ".format(bb, var_ins[bb]))
+            for bb in var_out:
+                print("var_out for {}: ".format(bb, var_out[bb]))
 
         return var_ins, var_out
 
@@ -714,7 +729,7 @@ class RegisterAssignator:
                         conflict_map[reg_class][reg].add(reg2)
         return conflict_map
 
-    def create_color_map(self, conflict_map):
+    def create_color_map(self, conflict_map, verbose=False):
         max_color_num = 0
         max_degree = 0
         max_degree_node = None
@@ -795,7 +810,7 @@ class RegisterAssignator:
                         print("Error while assigning register of class {}, requesting index {}, only {} register(s) available".format(reg_class.name, linked_color, num_reg_in_class)) 
                         raise Exception()
 
-                    print("register {} of class {} has been assigned color {}".format(linked_reg, reg_class.name, linked_color))
+                    if verbose: print("register {} of class {} has been assigned color {}".format(linked_reg, reg_class.name, linked_color))
 
         return general_color_map
 
