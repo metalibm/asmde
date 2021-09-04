@@ -403,17 +403,31 @@ RV32F_INSN_PATTERN_MATCH = {
 }
 
 
+
+def isRV32IRegAllocatable(regFile, index):
+    """ default allocatable list for RV32 integer registers """
+    return index in [6, 7, 10, 11, 12, 13, 14, 15, 16, 17, 28, 29, 30, 31]
+def isRV32FRegAllocatable(regFile, index):
+    """ default allocatable list for RV32 integer registers """
+    return index in [0, 1, 2, 3, 4, 5, 6, 7, 10, 11, 12, 13, 14, 15, 16, 17, 28, 29, 30, 31]
+
+
 class RV32(Architecture):
     def __init__(self):
         Architecture.__init__(self,
             set([
-                RegFileDescription(RVRegister.IntReg, 32, PhysicalRegister, VirtualRegister),
-                RegFileDescription(RVRegister.FPReg, 32, PhysicalRegister, VirtualRegister)
+                RegFileDescription(RVRegister.IntReg, 32, PhysicalRegister, VirtualRegister, isAllocatable=isRV32IRegAllocatable),
+                RegFileDescription(RVRegister.FPReg, 32, PhysicalRegister, VirtualRegister, isAllocatable=isRV32FRegAllocatable)
             ]),
             dict(list(RV32I_INSN_PATTERN_MATCH.items()) +
                  list(RV32M_INSN_PATTERN_MATCH.items()) +
-                 list(RV32F_INSN_PATTERN_MATCH.items()))
+                 list(RV32F_INSN_PATTERN_MATCH.items()) +
+                 list(RV32D_INSN_PATTERN_MATCH.items())
+                 )
         )
+        # declaring x0 as constant (=0)
+        zeroReg = self.get_unique_phys_reg_object(0, RVRegister.IntReg)
+        zeroReg.const = True
 
     def getPhyRegPatternList(self):
         return [PhysicalRegisterPattern_Int, PhysicalRegisterPattern_Fp]
