@@ -386,8 +386,6 @@ RV32F_INSN_PATTERN_MATCH = {
     "fmax.s": FP_2OP_PATTERN_RND,
 
     "fsqrt.s": FP_1OP_PATTERN_RND,
-    "fcvt.s.d": FP_1OP_PATTERN_RND,
-    "fcvt.d.s": FP_1OP_PATTERN_RND,
 
     "fmadd.s" : FP_3OP_PATTERN_RND,
     "fnmadd.s": FP_3OP_PATTERN_RND,
@@ -395,7 +393,7 @@ RV32F_INSN_PATTERN_MATCH = {
     "fnmsub.s": FP_3OP_PATTERN_RND,
 
     "flw": LOAD_FP_PATTERN,
-    "fsw": STORE_PATTERN,
+    "fsw": STORE_FP_PATTERN,
 
     "fcvt.s.w": FP_OP_PATTERN(RVRegisterPattern_FP, [RVRegisterPattern_Int], optRounding=True),
     "fcvt.s.wu": FP_OP_PATTERN(RVRegisterPattern_FP, [RVRegisterPattern_Int], optRounding=True),
@@ -403,7 +401,8 @@ RV32F_INSN_PATTERN_MATCH = {
     "fcvt.wu.s": FP_OP_PATTERN(RVRegisterPattern_Int, [RVRegisterPattern_FP], optRounding=True),
 
     "fmv.x.s": FP_OP_PATTERN(RVRegisterPattern_Int, [RVRegisterPattern_FP]),
-    "fmc.s.x": FP_OP_PATTERN(RVRegisterPattern_FP, [RVRegisterPattern_Int]),
+    "fmv.s.x": FP_OP_PATTERN(RVRegisterPattern_FP, [RVRegisterPattern_Int]),
+    "fmv.s": FP_1OP_PATTERN,
 
     "feq.s": FP_OP_PATTERN(RVRegisterPattern_Int, [RVRegisterPattern_Int]*2),
     "flt.s": FP_OP_PATTERN(RVRegisterPattern_Int, [RVRegisterPattern_Int]*2),
