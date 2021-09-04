@@ -239,6 +239,7 @@ class RegFile:
         self.description = description
         self.physical_pool = dict((i, self.description.reg_ctor(i, description.reg_class)) for i in range(self.description.num_phys_reg))
         self.virtual_pool = {}
+        self.isAllocatable = description.isAllocatable
 
     def get_phys_index(self, index, spec=None):
         """ translate an index and a specifier into an actual physical index
@@ -264,6 +265,11 @@ class RegFile:
     def get_max_phys_register_index(self):
         return self.description.num_phys_reg - 1
 
+    def get_allocatable_range(self):
+        """ return the range of allocatable indexes from this register file """
+        for i in range(self.description.num_phys_reg):
+            if self.isAllocatable(self, i): yield i
+
 class SpecialRegFile(RegFile):
     def __init__(self, description):
         self.description = description
@@ -275,12 +281,13 @@ class SpecialRegFile(RegFile):
         
 class RegFileDescription:
     """ descriptor of a register file object """
-    def __init__(self, reg_class, num_phys_reg, reg_ctor, virtual_reg_ctor, reg_file_class=RegFile):
+    def __init__(self, reg_class, num_phys_reg, reg_ctor, virtual_reg_ctor, reg_file_class=RegFile, isAllocatable=lambda self, index: True):
         self.reg_class = reg_class
         self.num_phys_reg = num_phys_reg
         self.reg_ctor = reg_ctor
         self.virtual_reg_ctor = virtual_reg_ctor
         self.reg_file_class = reg_file_class
+        self.isAllocatable = isAllocatable
 
 class Architecture:
     """ Base class for architecture description """
@@ -790,7 +797,7 @@ class RegisterAssignator:
                         remaining_reg_list = reg_list[1:]
                         unavailable_color_set = set([color_map[neighbour] for neighbour in graph[head_reg] if neighbour in color_map])
 
-                        valid_color_set = [color for color in range(self.arch.reg_pool[reg_class].description.num_phys_reg) if head_reg.constraint(color)]
+                        valid_color_set = [color for color in self.arch.reg_pool[reg_class].get_allocatable_range() if head_reg.constraint(color)]
                         if not len(valid_color_set):
                             # no color available in valid set
                             return None
