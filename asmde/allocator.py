@@ -66,9 +66,11 @@ class MultiArchRegister:
 
 class PhysicalRegister(Register):
     """ Physical register """
-    def __init__(self, index, reg_class=None):
+    def __init__(self, index, reg_class=None, const=False):
         self.index = index
         self.reg_class = reg_class
+        # is the register constant ?
+        self.const = const
 
     def __repr__(self):
         return self.reg_class.get_single_phy_reg_repr(self)
