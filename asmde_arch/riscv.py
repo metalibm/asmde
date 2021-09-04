@@ -251,7 +251,7 @@ ZEROOP_PATTERN = SequentialPattern([OpcodePattern("opc")],
 COND_BRANCH_PATTERN = SequentialPattern(
         [OpcodePattern("opc"), RVRegisterPattern_Int("src1"),
          RVRegisterPattern_Int("src2"), LabelPattern("dst")],
-        lambda result: Instruction(result["opc"], is_jump=True,
+        lambda result: Instruction(result["opc"], is_cond_jump=True,
                                    use_list=(result["src1"] + result["src2"]),
                                    jump_label=result["dst"],
                                    dump_pattern=lambda color_map, use_list, def_list:

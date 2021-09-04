@@ -182,23 +182,29 @@ class DebugObject:
         return "line {}".format(self.src_line)
 
 class Instruction:
-    def __init__(self, insn_object, def_list=None, use_list=None, dbg_object=None, dump_pattern=None, is_jump=False, match_pattern=None, jump_label=None):
+    def __init__(self, insn_object, def_list=None, use_list=None, dbg_object=None, dump_pattern=None, is_nocond_jump=False, is_cond_jump=False, match_pattern=None, jump_label=None):
         self.insn_object = insn_object
         self.def_list = [] if def_list is None else def_list
         self.use_list = [] if use_list is None else use_list
         self.dbg_object = dbg_object
         # function (use_list, def_list) -> instruction string
         self.dump_pattern = dump_pattern
-        self.is_jump = is_jump
+        self.is_nocond_jump = is_nocond_jump
+        self.is_cond_jump = is_cond_jump
         self.jump_label = jump_label
         # information on pattern used to match the instruction in the input
         # (if any)
         self.match_pattern = match_pattern
 
+    @property
+    def is_jump(self):
+        return self.is_nocond_jump or self.is_cond_jump
+
     def __repr__(self):
         return self.insn_object
 
 class Bundle:
+    standard = True
     def __init__(self, insn_list=None):
         self.insn_list = [] if insn_list is None else insn_list
 
@@ -219,8 +225,12 @@ class Bundle:
         return set(sum([insn.def_list for insn in self.insn_list], []))
 
     @property
-    def has_jump(self):
-        return any(insn.is_jump for insn in self.insn_list)
+    def has_nocond_jump(self):
+        return any(insn.is_nocond_jump for insn in self.insn_list)
+
+    @property
+    def has_cond_jump(self):
+        return any(insn.is_cond_jump for insn in self.insn_list)
 
 
 
@@ -341,14 +351,16 @@ class BasicBlock:
     @property
     def fallback(self):
         """ basic block fall backs to the next one if it does not end with
-            a jump """
-        return not self.bundle_list[-1].has_jump
+            a non-conditional jump """
+        return (not self.bundle_list[-1].has_nocond_jump) or self.bundle_list[-1].has_cond_jump
 
     def add_bundle(self, bundle):
         self.bundle_list.append(bundle)
 
     def add_label(self, label):
         self.label_list.append(label)
+    def add_directive(self, directive):
+        self.directive_list.append(directive)
 
     def add_predecessor(self, pred):
         self.preds.append(pred)
