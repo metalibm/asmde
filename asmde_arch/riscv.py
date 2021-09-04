@@ -26,8 +26,10 @@ class RVRegister(Register):
         reg_prefix = "x"
         @classmethod
         def aliasResolution(cls, spec, index):
-            isAlias = spec != "x"
+            # None is the default spec
+            isAlias = spec != "x" and spec != None
             ALIAS_RESOLUTION_MAP = {
+                None: lambda xi: xi,
                 "x": lambda xi: xi,
                 "ra": lambda _: 1,
                 "sp": lambda _: 2,
@@ -46,8 +48,9 @@ class RVRegister(Register):
         reg_prefix = "f"
         @classmethod
         def aliasResolution(cls, spec, index):
-            isAlias = spec != "f"
+            isAlias = spec != "f" and spec != None
             ALIAS_RESOLUTION_MAP = {
+                None: lambda fi: fi,
                 "f": lambda fi: fi,
                 "ft": lambda fti: fti if fti <= 7 else (fti + 20),
                 "fs": lambda fsi: (fsi + 8) if fsi <= 1 else (fsi + 16),
