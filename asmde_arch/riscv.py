@@ -487,6 +487,7 @@ class RV32(Architecture):
     def getVirtualRegClassPatternMap(self):
        REG_CLASS_PATTERN_MAP = {
            "X": VirtualRegisterPattern_Int,
+           "I": VirtualRegisterPattern_Int,
            "A": VirtualRegisterPattern_Int,
            "F": VirtualRegisterPattern_Fp,
        }
