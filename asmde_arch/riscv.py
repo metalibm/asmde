@@ -376,7 +376,6 @@ LOAD_FP_PATTERN = LOAD_PATTERN(RVRegisterPattern_FP)
 STORE_FP_PATTERN = STORE_PATTERN(RVRegisterPattern_FP)
 
 
-
 RV32F_INSN_PATTERN_MATCH = {
     "fadd.s": FP_2OP_PATTERN_RND,
     "fsub.s": FP_2OP_PATTERN_RND,
@@ -416,6 +415,46 @@ RV32F_INSN_PATTERN_MATCH = {
 }
 
 
+RV32D_INSN_PATTERN_MATCH = {
+    "fadd.d": FP_2OP_PATTERN_RND,
+    "fsub.d": FP_2OP_PATTERN_RND,
+    "fmul.d": FP_2OP_PATTERN_RND,
+    "fdiv.d": FP_2OP_PATTERN_RND,
+    "fmin.d": FP_2OP_PATTERN_RND,
+    "fmax.d": FP_2OP_PATTERN_RND,
+
+    "fsqrt.d": FP_1OP_PATTERN_RND,
+
+    "fcvt.s.d": FP_1OP_PATTERN_RND,
+    "fcvt.d.s": FP_1OP_PATTERN_RND,
+
+    "fmadd.d" : FP_3OP_PATTERN_RND,
+    "fnmadd.d": FP_3OP_PATTERN_RND,
+    "fmsub.d" : FP_3OP_PATTERN_RND,
+    "fnmsub.d": FP_3OP_PATTERN_RND,
+
+    "fld": LOAD_FP_PATTERN,
+    "fsd": STORE_PATTERN,
+
+    "fcvt.d.w": FP_OP_PATTERN(RVRegisterPattern_FP, [RVRegisterPattern_Int], optRounding=True),
+    "fcvt.d.wu": FP_OP_PATTERN(RVRegisterPattern_FP, [RVRegisterPattern_Int], optRounding=True),
+    "fcvt.w.d": FP_OP_PATTERN(RVRegisterPattern_Int, [RVRegisterPattern_FP], optRounding=True),
+    "fcvt.wu.d": FP_OP_PATTERN(RVRegisterPattern_Int, [RVRegisterPattern_FP], optRounding=True),
+
+    # RV64D-only
+    # "fmv.x.d": FP_OP_PATTERN(RVRegisterPattern_Int, [RVRegisterPattern_FP]),
+    "fmv.d": FP_1OP_PATTERN,
+
+    "feq.d": FP_OP_PATTERN(RVRegisterPattern_Int, [RVRegisterPattern_Int]*2),
+    "flt.d": FP_OP_PATTERN(RVRegisterPattern_Int, [RVRegisterPattern_Int]*2),
+    "fle.d": FP_OP_PATTERN(RVRegisterPattern_Int, [RVRegisterPattern_Int]*2),
+
+    "fsgnj.d": FP_OP_PATTERN(RVRegisterPattern_FP, [RVRegisterPattern_FP]),
+    "fsgnjn.d": FP_OP_PATTERN(RVRegisterPattern_FP, [RVRegisterPattern_FP]),
+    "fsgnjx.d": FP_OP_PATTERN(RVRegisterPattern_FP, [RVRegisterPattern_FP]),
+
+    "fclass.d": FP_OP_PATTERN(RVRegisterPattern_Int, [RVRegisterPattern_FP]),
+}
 
 def isRV32IRegAllocatable(regFile, index):
     """ default allocatable list for RV32 integer registers """
