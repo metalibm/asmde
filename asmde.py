@@ -17,7 +17,9 @@ if __name__ == "__main__":
     parser.add_argument("--verbose", action="store_const", default=False, const=True, help="enable general debug/info message display")
 
     parser.add_argument("--output", action="store", default=None, help="select output file (default stdout)")
-    parser.add_argument("--input", action="store", help="select input file")
+    parser.add_argument("-S", dest='asm_dump', action="store_const", default=False, const=True,
+                        help="select assigned assembly output")
+    parser.add_argument("input", help="input file")
     parser.add_argument("--arch", action="store", default=DummyArchitecture,
                                   type=parse_architecture, help="select target architecture")
 
@@ -39,7 +41,7 @@ if __name__ == "__main__":
             if args.lexer_verbose:
                 print(lexem_list)
             dbg_object = DebugObject(line_no)
-            asm_parser.parse_asm_line(lexem_list, dbg_object=dbg_object)
+            asm_parser.parse_asm_line(lexem_list, dbg_object=dbg_object, src_line=line)
         # finish program (e.g. connecting last BB to sink)
         asm_parser.program.end_program()
         if verbose:
@@ -87,32 +89,31 @@ if __name__ == "__main__":
             print("register assignation for class {} does is not valid")
             sys.exit(1)
 
-    def dump_allocation(color_map, output_callback):
+    def dump_allocation(program, arch, color_map, output_callback):
         """ dump virtual register allocation mapping """
+        if verbose: print("dumping allocation")
         for reg_class in color_map:
             for reg in color_map[reg_class]:
                 if reg.is_virtual():
                     output_callback("#define {} {}\n".format(reg.name, color_map[reg_class][reg]))
 
-    def dump_program(bb_list, color_map):
-        for bb in bb_list:
-            for bundle in bb.bundle_list:
-                for insn in bundle.insn_list:
-                    if not insn.dump_pattern is None:
-                        # use_list = [reg.instanciate(color_map) for reg in insn.use_list]
-                        # def_list = [reg.instanciate(color_map) for reg in insn.def_list]
+    def dump_program(program, arch, color_map, dumpFunction):
+        """ dump whole program with assigned registers """
+        if verbose: print("dumping program")
+        for elt in program.program_seq:
+            dumpFunction(elt.dump(arch, color_map) + "\n")
 
-                        print(insn.dump_pattern(color_map, insn.use_list, insn.def_list))
+    # selection of the output generation function
+    if args.asm_dump:
+        outGen = dump_program
+    else:
+        outGen = dump_allocation
 
-            if asm_parser.arch.hasBundle():
-                print(";;")
-
-
+    # setting dump function
     if args.output is None:
-        dump_allocation(color_map, lambda s: print(s, end=""))
+        # defaulting to stdout
+        dumpFunction = lambda s: print(s, end="")
+        outGen(program, arch, color_map, dumpFunction)
     else:
         with open(args.output, "w") as output_stream:
-            dump_allocation(color_map, lambda s: output_stream.write(s))
-
-    print("dumping program")
-    dump_program(asm_parser.program.bb_list, color_map)
+            outGen(program, arch, color_map, lambda s: output_stream.write(s))
