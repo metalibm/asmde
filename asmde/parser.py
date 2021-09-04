@@ -183,9 +183,6 @@ class PhysicalRegisterPattern(Pattern):
             if re.fullmatch(PRP_Class.REG_PATTERN, reg_lexem.value):
                 # extracting specifier and index
                 spec_index_list = [PRP_Class.splitSpecIndex(subreg) for subreg in re.findall(PRP_Class.SUB_REG_PATTERN, reg_lexem.value)]
-                print(reg_lexem.value, spec_index_list)
-                #index_range = [PRP_Class.aliasResolution(arch, spec_index(1), spec_index(2)) for spec_index in spec_index_list]
-                # index_range = [int(index) for index in re.split("\D+", reg_lexem.value) if index != ""]
                 register_list = [PRP_Class.get_unique_reg_obj(arch, index, spec) for (spec, index) in spec_index_list]
             #if re.fullmatch(STD_REG_PATTERN, reg_lexem.value):
             #    register_list = [arch.get_unique_phys_reg_object(index, PhysicalRegister.Std) for index in index_range]
@@ -193,7 +190,6 @@ class PhysicalRegisterPattern(Pattern):
             #    register_list = [arch.get_unique_phys_reg_object(index, PhysicalRegister.Acc) for index in index_range]
             else:
                 return None
-                print(PRP_Class, lexem_list)
                 raise NotImplementedError
 
             return register_list, lexem_list[1:]
