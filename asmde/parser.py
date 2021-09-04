@@ -81,8 +81,9 @@ class VirtualRegisterPattern(Pattern):
         virtual_register_type_lexem = lexem_list[0]
         lexem_list = lexem_list[1:]
         reg_type = virtual_register_type_lexem.value
+        REG_CLASS_PATTERN_MAP = arch.getVirtualRegClassPatternMap()
 
-        if not isinstance(virtual_register_type_lexem, Lexem) or not reg_type in VRP_Class.VIRT_REG_DESCRIPTOR:
+        if not isinstance(virtual_register_type_lexem, Lexem) or not reg_type in REG_CLASS_PATTERN_MAP:
             # fail to match
             return None
 
