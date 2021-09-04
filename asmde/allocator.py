@@ -322,7 +322,7 @@ class BasicBlock:
     index_count = 0
     per_index_map = {}
 
-    def __init__(self, label="undef"):
+    def __init__(self, label="undef", realLabel=False):
         # list of predecessors
         self.preds = []
         # list of successors
@@ -331,6 +331,7 @@ class BasicBlock:
         self.index = BasicBlock.get_new_index()
 
         self.label = label
+        self.realLabel = realLabel
 
         # ensuring index unicity
         assert (not self.index in BasicBlock.per_index_map)
@@ -339,6 +340,7 @@ class BasicBlock:
 
         self.bundle_list = []
         self.label_list = []
+        self.directive_list = []
 
 
     def __repr__(self):
@@ -389,6 +391,22 @@ class BasicBlock:
             print("[WARNING] duplicate index for bb {}/{} in BasicBlock.merge_in".format(self, merged_bb)) 
         self.index = self.index or merged_bb.index
 
+    def dump(self, arch, color_map):
+        s = ""
+        if self.realLabel:
+            s += ("{}:\n".format(self.label))
+        for bundle in self.bundle_list:
+            for insn in bundle.insn_list:
+                if not insn.dump_pattern is None:
+                    # use_list = [reg.instanciate(color_map) for reg in insn.use_list]
+                    # def_list = [reg.instanciate(color_map) for reg in insn.def_list]
+
+                    s += "    " + (insn.dump_pattern(color_map, insn.use_list, insn.def_list)) + "\n"
+
+            if arch.hasBundle():
+                s += (";;\n")
+        return s
+
 class Directive:
     """ Assembly directive container """
     def __init__(self, value):
@@ -407,29 +425,39 @@ class Program:
         self.bb_label_map = {}
         self.source_bb = self.add_bb("source")
         self.sink_bb = self.add_bb("sink")
-        if not empty:
-            self.current_bb = self.add_bb()
-            self.source_bb.connect_to(self.current_bb)
-        else:
-            self.current_bb = None
+        self._current_bb = None
 
         # dict <label_name> : program offset (in bundles)
         #self.label_map = {}
 
 
+    @property
+    def current_bb(self):
+        # the first BB is lazily initialized during the first insertion
+        if self._current_bb is None:
+            self._current_bb = self.add_bb()
+            self.source_bb.connect_to(self._current_bb)
+        return self._current_bb
+
+    @current_bb.setter
+    def current_bb(self, value):
+        self._current_bb = value
+
     def add_bundle(self, bundle):
         self.current_bb.add_bundle(bundle)
         # self.bundle_list.append(bundle)
 
-    def add_bb(self, label="undef"):
     def add_program_element(self, elt):
         self.program_seq.append(elt)
 
     def add_directive(self, directive):
         self.program_seq.append(directive)
+
+    def add_bb(self, label="undef", realLabel=False, program_insert=True):
         """ add a new BasicBlock without modifying self.current_bb reference """
-        new_bb = BasicBlock(label)
+        new_bb = BasicBlock(label, realLabel=realLabel)
         self.bb_list.append(new_bb)
+        if program_insert: self.program_seq.append(new_bb)
         return new_bb
 
     def add_new_current_bb(self, label="undef"):
@@ -445,7 +473,7 @@ class Program:
         """ search if label is already linked to a BasicBlock,
             if so returns it, else create one """
         if not label in self.bb_label_map:
-            self.bb_label_map[label] = self.add_bb(label)
+            self.bb_label_map[label] = self.add_bb(label, program_insert=False)
         return self.bb_label_map[label]
 
     def add_label(self, label, offset=None):
@@ -455,7 +483,7 @@ class Program:
         if not self.current_bb.empty:
             # finishing previous BB and opening a new one
             previous_bb = self.current_bb
-            self.current_bb = self.add_bb(label)
+            self.current_bb = self.add_bb(label, realLabel=True, program_insert=True)
             if previous_bb.fallback:
                 previous_bb.connect_to(self.current_bb)
         if label in self.bb_label_map:
@@ -465,6 +493,8 @@ class Program:
                 self.bb_label_map[bb_label] = self.current_bb
         else:
             self.current_bb.label = label
+            # patching label to declare it as true Label
+            self.current_bb.realLabel = True
             self.bb_label_map[label] = self.current_bb
 
         #if offset is None:
@@ -656,7 +686,9 @@ class RegisterAssignator:
                 print("def_list {}: {}".format(reg, def_list[reg]))
             print("post_used_list: {}".format(program.post_used_list))
         # adding post used list into sink BB
-        for reg in program.post_used_list:
+        for regObj in program.post_used_list:
+            # register alias disambiguation
+            reg = regObj.baseReg
             var_ins[program.sink_bb].add(reg)
             var_out[program.sink_bb].add(reg)
 
