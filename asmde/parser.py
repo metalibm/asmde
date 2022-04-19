@@ -47,7 +47,7 @@ def MetaPopOperatorPredicate(op_value):
     def predicate(lexem_list):
         lexem = lexem_list[0]
         if not isinstance(lexem, OperatorLexem) or lexem.value != op_value:
-            # raise Exception(" expecting operator {}, got {}".format(op_value, lexem)) 
+            # raise Exception(" expecting operator {}, got {}".format(op_value, lexem))
             return None
         return lexem_list[1:]
     return predicate
@@ -107,7 +107,7 @@ class VirtualRegisterPattern(Pattern):
 class VirtualRegisterPattern_Any(VirtualRegisterPattern):
     @classmethod
     def get_reg_list_from_names(VRP_Class, arch, reg_name_list, reg_type):
-        
+
        # REG_CLASS_PATTERN_MAP = {
        #     "R": VirtualRegisterPattern_Std,
        #     "A": VirtualRegisterPattern_Acc,
@@ -297,7 +297,7 @@ class GenericOffsetPattern(Pattern):
             print("unrecognized lexem {} while parsing for offset".format(offset_lexem))
             raise NotImplementedError
         return offset, lexem_list
-    
+
 
 class OffsetPattern_Std(GenericOffsetPattern):
     """ pattern for address offset """
@@ -346,7 +346,7 @@ class OpcodePattern(Pattern):
                 predicate = lexem_list[1].value
                 opcode = "{}.{}".format(opcode, predicate)
                 lexem_list = lexem_list[2:]
-            
+
             return opcode, lexem_list
 
 class LabelPattern(Pattern):
@@ -515,6 +515,7 @@ class AsmParser:
         if not len(lexem_list): return
         head = lexem_list[0]
         if isinstance(head, BundleSeparatorLexem):
+            assert self.arch.hasBundle()
             self.program.add_bundle(self.ongoing_bundle)
             self.ongoing_bundle = Bundle()
         elif isinstance(head, MacroLexem):
@@ -544,7 +545,7 @@ class AsmParser:
                 # skipping "Dissasembly of section ..."
                 pass
             elif len(lexem_list) > 1 and isinstance(lexem_list[1], LabelEndLexem):
-                if len(self.ongoing_bundle) != 0:
+                if len(self.ongoing_bundle) != 0 and self.arch.hasBundle():
                     print("Error: label can not be inserted in the middle of a bundle @ {}".format(dbg_object))
                     sys.exit(1)
                 self.program.add_label(head.value)
@@ -575,7 +576,8 @@ class AsmParser:
                     succ.add_predecessor(self.program.current_bb)
                 # in objdump file, a instruction line may be ended by a bundle separator
                 #   goto label;;
-                if len(lexem_list) and isinstance(lexem_list[-1], BundleSeparatorLexem):
+                if len(lexem_list) and isinstance(lexem_list[-1], BundleSeparatorLexem) or \
+                        not self.arch.hasBundle():
                     self.program.add_bundle(self.ongoing_bundle)
                     self.ongoing_bundle = Bundle()
 

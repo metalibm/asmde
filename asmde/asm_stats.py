@@ -75,7 +75,8 @@ if __name__ == "__main__":
     for input_name in args.input:
         print("parsing input program {}".format(input_name))
         program = Program()
-        asm_parser = AsmParser(args.arch, program)
+        arch = args.arch()
+        asm_parser = AsmParser(arch, program)
         with open(input_name, "r") as input_stream:
             # TODO/FIXME: optimize file reading (line by line rather than full file at once)
             full_input_file = input_stream.read()
@@ -114,7 +115,7 @@ if __name__ == "__main__":
             # finish program (e.g. connecting last BB to sink)
             asm_parser.program.end_program()
 
-        program_stats = ProgramStatistics(args.arch, input_name)
+        program_stats = ProgramStatistics(arch, input_name)
         program_stats.analyse_program(program, args.verbose_pattern)
         program_stats.fuse_in(stats, exhaustive_opc=args.display_all_opcodes)
 
