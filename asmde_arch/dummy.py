@@ -6,6 +6,9 @@ from asmde.parser import (
     RegisterPattern_DualStd, RegisterPattern_Acc,
     PhysicalRegisterPattern_Std,
     PhysicalRegisterPattern_Acc,
+    VirtualRegisterPattern_Std,
+    VirtualRegisterPattern_Acc,
+    VirtualRegisterPattern_DualStd,
     LabelPattern
 )
 
