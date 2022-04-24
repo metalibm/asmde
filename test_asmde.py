@@ -12,7 +12,7 @@ def test_basic():
     ]
     # testing all available examples
     for test in test_list:
-        print("executing {}".format(test))
+        print("executing basic test: {}".format(test))
         test_ret = subprocess.check_call("python3 asmde.py {}".format(test).split(" "))
         print("{} test_ret={}".format(test, test_ret))
         assert test_ret == 0
@@ -31,7 +31,7 @@ def test_trace_parsing():
     ]
 
     for test, golden in test_list:
-        print("executing {}".format(test))
+        print("executing trace parsing test: {}".format(test))
         test_ret = subprocess.check_call("python3 asmde/asm_stats.py --arch kv3 --input {} --mode trace --output /tmp/asm_test.count".format(test).split(" "))
         print("{} test_ret={}".format(test, test_ret))
         assert test_ret == 0
@@ -39,8 +39,25 @@ def test_trace_parsing():
         print("{} test_ret={}".format(test, test_ret))
         assert test_ret == 0
 
+def test_asm_stats():
+    """ minimal testing of asm stats against golden expected output """
+    test_list = [
+        ("examples/riscv/test_rv32_0.S", "tests/expected/test_rv32_0.S.count"),
+        ("examples/riscv/test_rv32_1.S", "tests/expected/test_rv32_1.S.count"),
+        ("examples/riscv/test_rv32_m.S", "tests/expected/test_rv32_m.S.count"),
+    ]
+
+    for test, golden in test_list:
+        print("executing asm_stats test: {}".format(test))
+        test_ret = subprocess.check_call("python3 asmde/asm_stats.py --arch rv32 --input {} --mode asm --output /tmp/asm_test.count".format(test).split(" "))
+        print("{} test_ret={}".format(test, test_ret))
+        assert test_ret == 0
+        test_ret = subprocess.check_call("diff /tmp/asm_test.count {}".format(golden).split(" "))
+        print("{} test_ret={}".format(test, test_ret))
+        assert test_ret == 0
 
 if __name__ == "__main__":
     test_basic()
     # broken because asmde module is not available in default PYTHONPATH
     # test_trace_parsing()
+    test_asm_stats()
