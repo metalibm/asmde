@@ -1,4 +1,4 @@
-Build status: [![Build Status](https://travis-ci.org/nibrunie/asmde.svg?branch=master)](https://travis-ci.org/nibrunie/asmde)
+Build status: [![Python package](https://github.com/metalibm/asmde/actions/workflows/python-package.yml/badge.svg)](https://github.com/metalibm/asmde/actions/workflows/python-package.yml)
 
 # Assembly Development Editor
 
