@@ -361,7 +361,8 @@ class BasicBlock:
     def fallback(self):
         """ basic block fall backs to the next one if it does not end with
             a non-conditional jump """
-        return (not self.bundle_list[-1].has_nocond_jump) or self.bundle_list[-1].has_cond_jump
+        return not self.bundle_list or \
+                (not self.bundle_list[-1].has_nocond_jump) or self.bundle_list[-1].has_cond_jump
 
     def add_bundle(self, bundle):
         self.bundle_list.append(bundle)

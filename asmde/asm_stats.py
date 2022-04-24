@@ -58,7 +58,7 @@ if __name__ == "__main__":
     parser.add_argument("--output", action="store", default=None, help="select output file (default stdout)")
     parser.add_argument("--allow-error", action="store", default=0, type=int, help="set the number of accepted errors before stopping")
     parser.add_argument("--input", action="store", nargs="+", help="select input file")
-    parser.add_argument("--mode", action="store", default="objdump", choices=["objdump", "trace"], help="indicate assembly parsing mode")
+    parser.add_argument("--mode", action="store", default="objdump", choices=["objdump", "trace", "asm"], help="indicate assembly parsing mode")
     parser.add_argument("--arch", action="store", default=DummyArchitecture(), type=parse_architecture, help="select target architecture")
     parser.add_argument("--verbose-lexing", action="store_const", default=False, const=True, help="enable verbose lexing (more debug/info/warning messages)")
     parser.add_argument("--verbose-pattern", action="store_const", default=False, const=True, help="indicate that verbose match pattern must be use to distinguish insn")
