@@ -7,15 +7,15 @@ asmde is a small set of utilities to help analyse and developp assembly programs
 ## Install
 
 ```
-pip3 install git+https://github.com/nibrunie/asmde.git
+pip3 install git+https://github.com/metalibm/asmde.git
 ```
 
 # Assembly statistics
 
 The command `python3 -m asm_stats` parses an input file and generates an histogram of encountered assembly instructions.
-It supports source assembly, trace (`--mode trace`), objdump parsing (`--mode objdump`).
+It supports source assembly (`--mode asm`), trace (`--mode trace`), objdump parsing (`--mode objdump`).
 ```
-python3 asmde/asm_stats.py --arch <binary-arch> [--mode objdump|--mode trace] -input <input-file>
+python3 asmde/asm_stats.py --arch <binary-arch> [--mode asm|objdump|trace] <input-file>
 ```
 
 To objdump a file compatible with the `--mode objdump` you shoud use the following options: `objdump -d --no-addresses --no-show-raw-insn`.
@@ -26,6 +26,12 @@ To output an histogram displaying all the architecture instructions (and not jus
 # Register Assignator
 The register assignator is another asmde tools (called directly with `asmde.py`) which perform basic register assignation on an input assembly file with extended syntax.
 The extended syntax consists in assembly syntax aumented with Variable and post-process the program to perform register allocation.
+
+### Basic example
+The following example parse the assembly template in `test_rv32_0.S` and generates an assembly output with assigned registers.
+```
+python3 asmde.py -S --arch rv32 examples/riscv/test_rv32_0.S
+```
 
 ### Command line options
 
