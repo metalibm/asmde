@@ -1,0 +1,16 @@
+# examples/riscv/test_rv32_0.S
+add 3
+addi-imm 1
+auipc-imm 1
+beq 1
+bne 1
+ebreak 1
+ecall 1
+fence 2
+jal-imm 1
+jalr-imm 1
+lui-imm 1
+lw 1
+slt 1
+slti-imm 1
+sw 2
