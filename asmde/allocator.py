@@ -278,7 +278,7 @@ class SpecialRegFile(RegFile):
         if not tag in self.special_pool:
             self.special_pool[tag] = PhysicalRegister(tag, self.description.reg_class)
         return self.special_pool[tag]
-        
+
 class RegFileDescription:
     """ descriptor of a register file object """
     def __init__(self, reg_class, num_phys_reg, reg_ctor, virtual_reg_ctor, reg_file_class=RegFile, isAllocatable=lambda self, index: True):
@@ -388,7 +388,7 @@ class BasicBlock:
         assert (self.bundle_list == [] or merged_bb.bundle_list == [])
         self.bundle_list = self.bundle_list or merged_bb.bundle_list
         if not (self.index is None or merged_bb.index is None):
-            print("[WARNING] duplicate index for bb {}/{} in BasicBlock.merge_in".format(self, merged_bb)) 
+            print("[WARNING] duplicate index for bb {}/{} in BasicBlock.merge_in".format(self, merged_bb))
         self.index = self.index or merged_bb.index
 
     def dump(self, arch, color_map):
@@ -747,7 +747,7 @@ class RegisterAssignator:
                         reg = regObj.baseReg
                         if not reg in liverange_map:
                             liverange_map[reg] = []
-                        if not(len(liverange_map[reg]) and liverange_map[reg][-1].start == (bb_index, index)): 
+                        if not(len(liverange_map[reg]) and liverange_map[reg][-1].start == (bb_index, index)):
                             # only register a liverange once per index value
                             liverange_map[reg].append(LiveRange(start=(bb_index, index), start_dbg_object=insn.dbg_object))
             # closing BB's LiveRange by iterating over var_out
@@ -874,7 +874,7 @@ class RegisterAssignator:
                     color_map[linked_reg] = linked_color
                     # check on colour bound
                     if linked_color >= num_reg_in_class:
-                        print("Error while assigning register of class {}, requesting index {}, only {} register(s) available".format(reg_class.name, linked_color, num_reg_in_class)) 
+                        print("Error while assigning register of class {}, requesting index {}, only {} register(s) available".format(reg_class.name, linked_color, num_reg_in_class))
                         raise Exception()
 
                     if verbose: print("register {} of class {} has been assigned color {}".format(linked_reg, reg_class.name, linked_color))
