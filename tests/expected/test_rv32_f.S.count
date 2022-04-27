@@ -1,0 +1,6 @@
+# examples/riscv/test_rv32_f.S
+fadd.s 1
+flw 2
+fmadd.s 1
+fmul.s 1
+fsub.s 2

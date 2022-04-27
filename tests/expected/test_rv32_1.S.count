@@ -1,0 +1,3 @@
+# examples/riscv/test_rv32_1.S
+add 6
+lw 1

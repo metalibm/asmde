@@ -1,0 +1,8 @@
+# examples/riscv/test_rv32_vadd.S
+addi-imm 4
+beq 1
+bne 1
+fadd.s 1
+flw 2
+fsw 1
+ret 2

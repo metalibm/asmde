@@ -1,0 +1,9 @@
+# examples/riscv/test_rv32_m.S
+div 1
+divu 1
+mul 1
+mulh 1
+mulhsu 1
+mulhu 1
+rem 1
+remu 1
