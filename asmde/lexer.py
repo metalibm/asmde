@@ -74,6 +74,10 @@ class UnmatchedLexem(ParentLexem):
     """ class for unmatched lexem """
     pass
 
+class SymbolLexem(ParentLexem):
+    PATTERN = "%(hi|lo)\([.\w\d]+\)"
+
+
 # extended regular expression for seperator, including
 # separators that will be included as valid lexems
 SEP_PATTERN = "([ \t,=\?])+"
@@ -87,7 +91,10 @@ def generate_line_lexems(s, verbose=False):
     for sub_word in re.split(SEP_PATTERN, s):
         if sub_word in ['', ' ', '\t']: continue
         lexem_match = None
-        for lexem_class in [ObjdumpMacro, ObjdumpLabel, FunctionStartLexem, FunctionEndLexem, CommentHeadLexem, TraceCommentHeadLexem, LabelEndLexem, MacroLexem, HexImmediateLexem, ImmediateLexem, RegisterLexem, OperatorLexem, BundleSeparatorLexem, Lexem, SpecialRegisterLexem]:
+        for lexem_class in [ObjdumpMacro, ObjdumpLabel, FunctionStartLexem, FunctionEndLexem,
+                            CommentHeadLexem, TraceCommentHeadLexem, LabelEndLexem, MacroLexem,
+                            HexImmediateLexem, ImmediateLexem, RegisterLexem, OperatorLexem,
+                            BundleSeparatorLexem, Lexem, SpecialRegisterLexem, SymbolLexem]:
             lexem_match = lexem_class.match(sub_word)
             if lexem_match is None:
                 continue

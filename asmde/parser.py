@@ -13,7 +13,7 @@ from asmde.lexer import (
     BundleSeparatorLexem, MacroLexem,
     HexImmediateLexem,
     ObjdumpLabel,
-    ObjdumpMacro
+    ObjdumpMacro, SymbolLexem, TraceCommentHeadLexem, UnmatchedLexem
 )
 
 from asmde.allocator import (
@@ -293,6 +293,8 @@ class GenericOffsetPattern(Pattern):
             offset, lexem_list = cls.OffsetPhysicalRegisterClass.parse(arch, lexem_list)
         elif isinstance(offset_lexem, Lexem):
             offset, lexem_list = cls.OffsetVirtuallRegisterClass.parse(arch, lexem_list)
+        elif isinstance(offset_lexem, SymbolLexem):
+            offset, lexem_list = [ImmediateValue(offset_lexem.value)], lexem_list[1:]
         else:
             print("unrecognized lexem {} while parsing for offset".format(offset_lexem))
             raise NotImplementedError
@@ -359,7 +361,12 @@ class LabelPattern(Pattern):
         else:
             head, lexem_list = lexem_list[0], lexem_list[1:]
             if (not isinstance(head, (Lexem, ObjdumpLabel))) and (isinstance(head, OperatorLexem) and head.value != "<"):
-                return None
+                if head.value == ".":
+                    # label starting with "."
+                    label = head.value + lexem_list[0].value
+                    return label, lexem_list[1:]
+                else:
+                    return None
             if isinstance(head, OperatorLexem) and head.value == "<":
                 label = head.value
                 head, lexem_list = lexem_list[0], lexem_list[1:]
