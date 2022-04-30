@@ -41,21 +41,27 @@ def test_trace_parsing():
 
 def test_asm_stats():
     """ minimal testing of asm stats against golden expected output """
+    class AsmStatsTest:
+        def __init__(self, arch, inFile, golden):
+            self.arch = arch
+            self.inFile = inFile
+            self.golden = golden
     test_list = [
-        ("examples/riscv/test_rv32_0.S", "tests/expected/test_rv32_0.S.count"),
-        ("examples/riscv/test_rv32_1.S", "tests/expected/test_rv32_1.S.count"),
-        ("examples/riscv/test_rv32_m.S", "tests/expected/test_rv32_m.S.count"),
-        ("examples/riscv/test_rv32_f.S", "tests/expected/test_rv32_f.S.count"),
-        ("examples/riscv/test_rv32_vadd.S", "tests/expected/test_rv32_vadd.S.count"),
+        AsmStatsTest("rv32", "examples/riscv/test_rv32_0.S", "tests/expected/test_rv32_0.S.count"),
+        AsmStatsTest("rv32", "examples/riscv/test_rv32_1.S", "tests/expected/test_rv32_1.S.count"),
+        AsmStatsTest("rv32", "examples/riscv/test_rv32_m.S", "tests/expected/test_rv32_m.S.count"),
+        AsmStatsTest("rv32", "examples/riscv/test_rv32_f.S", "tests/expected/test_rv32_f.S.count"),
+        AsmStatsTest("rv32", "examples/riscv/test_rv32_vadd.S", "tests/expected/test_rv32_vadd.S.count"),
+        AsmStatsTest("rv64", "tests/rv64-asm.s", "tests/expected/rv64.asm.s.count"),
     ]
 
-    for test, golden in test_list:
-        print("executing asm_stats test: {}".format(test))
-        test_ret = subprocess.check_call("python3 asmde/asm_stats.py --arch rv32 {} --mode asm --output /tmp/asm_test.count".format(test).split(" "))
-        print("{} test_ret={}".format(test, test_ret))
+    for test in test_list:
+        print(f"executing asm_stats test: {test.inFile}")
+        test_ret = subprocess.check_call(f"python3 asmde/asm_stats.py --arch {test.arch} {test.inFile} --mode asm --output /tmp/asm_test.count".split(" "))
+        print("{} test_ret={}".format(test.inFile, test_ret))
         assert test_ret == 0
-        test_ret = subprocess.check_call("diff /tmp/asm_test.count {}".format(golden).split(" "))
-        print("{} test_ret={}".format(test, test_ret))
+        test_ret = subprocess.check_call(f"diff /tmp/asm_test.count {test.golden}".split(" "))
+        print("{} test_ret={}".format(test.inFile, test_ret))
         assert test_ret == 0
 
 if __name__ == "__main__":
