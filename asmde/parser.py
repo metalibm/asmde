@@ -275,8 +275,11 @@ class ImmediatePattern(Pattern):
             else:
                 lexem_list = lexem_list[1:]
             return value, lexem_list
+        elif re.match("%.*\(.*\)", imm_lexem.value):
+            # immediate symbol
+            return ImmediateValue(imm_lexem.value), lexem_list[1:]
         else:
-            print("unrecognized lexem {} while parsing for immediate".format(offset_lexem))
+            print(f"unrecognized lexem {imm_lexem} while parsing for immediate")
             raise NotImplementedError
 
 class GenericOffsetPattern(Pattern):
@@ -456,7 +459,7 @@ class AsmParser:
             self.ongoing_bundle = Bundle()
         elif isinstance(head, MacroLexem):
             self.parse_macro(lexem_list[1:], dbg_object)
-        elif isinstance(head, CommentHeadLexem):
+        elif isinstance(head, (CommentHeadLexem, TraceCommentHeadLexem)):
             pass
         elif isinstance(head, OperatorLexem) and head.value == ".":
             # label starting with '.': ".label:"
@@ -477,7 +480,9 @@ class AsmParser:
                 if mnemonic in self.arch.insn_patterns:
                     insn_pattern = self.arch.insn_patterns[mnemonic]
                 else:
-                    # looking for compound instruction with specified
+                    # looking for compound instruction with specifier
+                    # by assembling <lexem0> "." <lexem1> "." (...) <lexemN>
+                    # into "<lexem0>.<lexem1>.(...)<lexemN>"
                     sub_lexem_list = lexem_list[1:]
                     while isinstance(sub_lexem_list[0], OperatorLexem) and sub_lexem_list[0].value == ".":
                         assert isinstance(sub_lexem_list[1], Lexem)
@@ -493,7 +498,8 @@ class AsmParser:
 
                 insn_match = insn_pattern.match(self.arch, lexem_list)
                 if insn_match is None:
-                    print("failed to match {} in {}".format(mnemonic, lexem_list))
+                    print("failed to match mnemonic {} in {}".format(mnemonic, lexem_list))
+                    import pdb; pdb.set_trace()
                     sys.exit(1)
                 else:
                     insn_object, lexem_list = insn_match
@@ -504,7 +510,7 @@ class AsmParser:
                 self.ongoing_bundle.add_insn(insn_object)
                 if insn_object.is_jump:
                     # succ = self.program.bb_label_map[insn_object.use_list[0]]
-                    # TODO/FIXME jump bb label should be extract with method
+                    # TODO/FIXME jump bb label should be extracted with method
                     #            and not directly from index 0 of use_list
                     succ = self.program.get_bb_by_label(insn_object.jump_label)
                     self.program.current_bb.add_successor(succ)
@@ -516,6 +522,7 @@ class AsmParser:
                     self.ongoing_bundle = Bundle()
 
         else:
+            print(f"unable to parse line {src_line}\n{lexem_list}")
             raise NotImplementedError
 
     def parse_objdump_line(self, lexem_list, dbg_object):
