@@ -5,4 +5,4 @@ bne 1
 fadd.s 1
 flw 2
 fsw 1
-ret 2
+ret 1

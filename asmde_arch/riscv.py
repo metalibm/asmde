@@ -37,7 +37,8 @@ class RVRegister(Register):
                 "tp": lambda _: 4,
                 "t": lambda ti: ti + 5 if ti <= 2 else ti + 25,
                 "fp": lambda _: 8,
-                "s": lambda si: {[(0, 8), (1, 9)] + [(i, i+16) for i in range(2, 12)]},
+                "zero": lambda _: 0,
+                "s": lambda si: dict([(0, 8), (1, 9)] + [(i, i+16) for i in range(2, 12)])[si],
                 "a": lambda ai: ai + 10,
             }
             return isAlias, ALIAS_RESOLUTION_MAP[spec](index)
@@ -67,7 +68,9 @@ class PhysicalRegisterPattern_Int(PhysicalRegisterPattern):
     """ RISC-V Integer Physical register """
     REG_PATTERN = "a[0-9]|zero|ra|sp|gp|tp|t[0-9]+|fp|s[0-9]+|x[0-9]+"
     SUB_REG_PATTERN = "a[0-9]|zero|ra|sp|gp|tp|t[0-9]+|fp|s[0-9]+|x[0-9]+"
-    REG_SPLIT_PATTERN = "(?P<spec>a|s|t|x|zero|ra|sp|gp|tp|fp)(?P<index>[0-9]*)"
+    SPLITABLE_PATTERN = "(a|s|t|x)([0-9]+)"
+    NON_SPLITABLE_PATTERN = "zero|ra|sp|gp|tp|fp" 
+    REG_SPLIT_PATTERN = "(?P<spec>a|s|t|x)(?P<index>[0-9]*)"
     REG_CLASS = RVRegister.IntReg
     REG_LEXEM = Lexem
 
@@ -75,9 +78,15 @@ class PhysicalRegisterPattern_Int(PhysicalRegisterPattern):
     def splitSpecIndex(cls, s):
         """ split string @p s into specifier and index
             return a 3-uple (isAlias, spec, index) """
-        match = re.match(cls.REG_SPLIT_PATTERN, s)
-        spec = match.group("spec")
-        index = int(match.group("index"))
+        if re.match(cls.SPLITABLE_PATTERN, s):
+            match = re.match(cls.REG_SPLIT_PATTERN, s)
+            spec = match.group("spec")
+            idxStr = match.group("index")
+            index = int(idxStr)
+        else:
+            assert re.match(cls.NON_SPLITABLE_PATTERN, s)
+            spec = s 
+            index = None
         return spec, index
 
 class VirtualRegisterPattern_Fp(VirtualRegisterPattern_SingleReg):
@@ -149,6 +158,13 @@ def std2opDumpPattern(parseResult):
                                       use_list[1].instanciate(color_map))
     return dump
 
+def std1opDumpPattern(parseResult):
+    def dump(color_map, use_list, def_list):
+        return "{} {}, {}".format(parseResult["opc"],
+                                  def_list[0].instanciate(color_map),
+                                  use_list[0].instanciate(color_map))
+    return dump
+
 class RV_MatchPattern:
     def __init__(self, tag):
         self.tag = tag
@@ -191,6 +207,15 @@ def STORE_PATTERN(SrcPattern):
 
 LOAD_INT_PATTERN = LOAD_PATTERN(RVRegisterPattern_Int)
 STORE_INT_PATTERN = STORE_PATTERN(RVRegisterPattern_Int)
+
+STD_1OP_PATTERN = SequentialPattern(
+        [OpcodePattern("opc", match_predicate=True), RVRegisterPattern_Int("dst"),
+         RVRegisterPattern_Int("op")],
+        lambda result:
+            Instruction(result["opc"],
+                        use_list=(result["op"]),
+                        def_list=result["dst"],
+                        dump_pattern=std1opDumpPattern(result)))
 
 STD_2OP_PATTERN = SequentialPattern(
         [OpcodePattern("opc"), RVRegisterPattern_Int("dst"),
@@ -271,6 +296,25 @@ COND_BRANCH_PATTERN = SequentialPattern(
                                         "{} {}, {}, {}".format(result["opc"], use_list[0].instanciate(color_map), use_list[1].instanciate(color_map), result["dst"])
                                     ))
 
+COND_BRANCH_1OP_PATTERN = SequentialPattern(
+        [OpcodePattern("opc"), RVRegisterPattern_Int("src1"),
+         LabelPattern("dst")],
+        lambda result: Instruction(result["opc"], is_cond_jump=True,
+                                   use_list=result["src1"],
+                                   jump_label=result["dst"],
+                                   dump_pattern=lambda color_map, use_list, def_list:
+                                        "{} {}, {}".format(result["opc"], use_list[0].instanciate(color_map), result["dst"])
+                                    ))
+CALL_PATTERN = SequentialPattern(
+        [OpcodePattern("opc"),
+         LabelPattern("dst")],
+        lambda result: Instruction(result["opc"],
+                                   is_nocond_jump=True,
+                                   jump_label=result["dst"],
+                                   dump_pattern=lambda color_map, use_list, def_list:
+                                        "{} {}".format(result["opc"], result["dst"])
+                                    ))
+
 RV32M_INSN_PATTERN_MATCH = {
     "mul":  STD_2OP_PATTERN,
 
@@ -301,6 +345,7 @@ RV32I_INSN_PATTERN_MATCH = {
     "sub":  STD_2OP_PATTERN,
 
     "lui":  STD_ZEROOP_1IMM_PATTERN,
+    "li":  STD_ZEROOP_1IMM_PATTERN,
     "auipc":  STD_ZEROOP_1IMM_PATTERN,
 
     # arithmetic instructions
@@ -308,6 +353,8 @@ RV32I_INSN_PATTERN_MATCH = {
     "sltu":  STD_2OP_PATTERN,
     "slti":  STD_1OP_1IMM_PATTERN,
     "sltiu":  STD_1OP_1IMM_PATTERN,
+    # alias
+    "snez": STD_1OP_PATTERN,
 
     # logic instructions
     "and":  STD_2OP_PATTERN,
@@ -330,10 +377,15 @@ RV32I_INSN_PATTERN_MATCH = {
     "ebreak": ZEROOP_PATTERN,
     "ecall": ZEROOP_PATTERN,
 
+
     # control flow
     "jalr":  STD_1OP_1IMM_PATTERN,
     "jal":  STD_ZEROOP_1IMM_PATTERN,
     "ret": STD_ZEROOP,
+    # alias
+    "call":  CALL_PATTERN,
+    "j":  CALL_PATTERN,
+
     # branch
     "beq": COND_BRANCH_PATTERN,
     "bne": COND_BRANCH_PATTERN,
@@ -341,6 +393,10 @@ RV32I_INSN_PATTERN_MATCH = {
     "bge": COND_BRANCH_PATTERN,
     "bltu": COND_BRANCH_PATTERN,
     "bgeu": COND_BRANCH_PATTERN,
+    # alias
+    "bnez": COND_BRANCH_1OP_PATTERN,
+    "beqz": COND_BRANCH_1OP_PATTERN,
+
 }
 
 def FP_OP_PATTERN(DstPattern, OpPatterns, match_predicate=True, optRounding=False):
@@ -353,9 +409,9 @@ def FP_OP_PATTERN(DstPattern, OpPatterns, match_predicate=True, optRounding=Fals
                     (", {}".format(parseResult["rnd"]) if "rnd" in parseResult else "")
         return dump
     return SequentialPattern(
-        [OpcodePattern("opc", match_predicate=match_predicate), RVRegisterPattern_FP("dst")] +
+        [OpcodePattern("opc", match_predicate=match_predicate), DstPattern("dst")] +
         [OpPatterns[i]("op%d" % i) for i in range(opNum)]
-        + [OptionalPattern(LabelPattern("rnd"))] if optRounding else [],
+        + ([OptionalPattern(LabelPattern("rnd"))] if optRounding else []),
         lambda result:
             Instruction(result["opc"],
                         use_list=sum([result["op%d" % i] for i in range(opNum)], []),
@@ -403,9 +459,9 @@ RV32F_INSN_PATTERN_MATCH = {
     "fmv.s.x": FP_OP_PATTERN(RVRegisterPattern_FP, [RVRegisterPattern_Int]),
     "fmv.s": FP_1OP_PATTERN,
 
-    "feq.s": FP_OP_PATTERN(RVRegisterPattern_Int, [RVRegisterPattern_Int]*2),
-    "flt.s": FP_OP_PATTERN(RVRegisterPattern_Int, [RVRegisterPattern_Int]*2),
-    "fle.s": FP_OP_PATTERN(RVRegisterPattern_Int, [RVRegisterPattern_Int]*2),
+    "feq.s": FP_OP_PATTERN(RVRegisterPattern_Int, [RVRegisterPattern_FP]*2),
+    "flt.s": FP_OP_PATTERN(RVRegisterPattern_Int, [RVRegisterPattern_FP]*2),
+    "fle.s": FP_OP_PATTERN(RVRegisterPattern_Int, [RVRegisterPattern_FP]*2),
 
     "fsgnj.s": FP_OP_PATTERN(RVRegisterPattern_FP, [RVRegisterPattern_FP]),
     "fsgnjn.s": FP_OP_PATTERN(RVRegisterPattern_FP, [RVRegisterPattern_FP]),
@@ -434,15 +490,13 @@ RV32D_INSN_PATTERN_MATCH = {
     "fnmsub.d": FP_3OP_PATTERN_RND,
 
     "fld": LOAD_FP_PATTERN,
-    "fsd": STORE_PATTERN,
+    "fsd": STORE_FP_PATTERN,
 
     "fcvt.d.w": FP_OP_PATTERN(RVRegisterPattern_FP, [RVRegisterPattern_Int], optRounding=True),
     "fcvt.d.wu": FP_OP_PATTERN(RVRegisterPattern_FP, [RVRegisterPattern_Int], optRounding=True),
     "fcvt.w.d": FP_OP_PATTERN(RVRegisterPattern_Int, [RVRegisterPattern_FP], optRounding=True),
     "fcvt.wu.d": FP_OP_PATTERN(RVRegisterPattern_Int, [RVRegisterPattern_FP], optRounding=True),
 
-    # RV64D-only
-    # "fmv.x.d": FP_OP_PATTERN(RVRegisterPattern_Int, [RVRegisterPattern_FP]),
     "fmv.d": FP_1OP_PATTERN,
 
     "feq.d": FP_OP_PATTERN(RVRegisterPattern_Int, [RVRegisterPattern_Int]*2),
@@ -460,11 +514,33 @@ def isRV32IRegAllocatable(regFile, index):
     """ default allocatable list for RV32 integer registers """
     return index in [6, 7, 10, 11, 12, 13, 14, 15, 16, 17, 28, 29, 30, 31]
 def isRV32FRegAllocatable(regFile, index):
-    """ default allocatable list for RV32 integer registers """
+    """ default allocatable list for RV32 floating-point registers """
     return index in [0, 1, 2, 3, 4, 5, 6, 7, 10, 11, 12, 13, 14, 15, 16, 17, 28, 29, 30, 31]
 
+def isRV64IRegAllocatable(regFile, index):
+    """ default allocatable list for RV64 integer registers """
+    # FIXME: copy of isRV32IRegAllocatable
+    return index in [6, 7, 10, 11, 12, 13, 14, 15, 16, 17, 28, 29, 30, 31]
+def isRV64FRegAllocatable(regFile, index):
+    """ default allocatable list for RV64 floating-point registers """
+    # FIXME: copy of isRV32FRegAllocatable
+    return index in [0, 1, 2, 3, 4, 5, 6, 7, 10, 11, 12, 13, 14, 15, 16, 17, 28, 29, 30, 31]
 
-class RV32(Architecture):
+class RV_Common(Architecture):
+    """ common architecture class for RISC-V """
+    def getPhyRegPatternList(self):
+        return [PhysicalRegisterPattern_Int, PhysicalRegisterPattern_Fp]
+
+    def getVirtualRegClassPatternMap(self):
+       REG_CLASS_PATTERN_MAP = {
+           "X": VirtualRegisterPattern_Int,
+           "I": VirtualRegisterPattern_Int,
+           "A": VirtualRegisterPattern_Int,
+           "F": VirtualRegisterPattern_Fp,
+       }
+       return REG_CLASS_PATTERN_MAP
+
+class RV32(RV_Common):
     def __init__(self):
         Architecture.__init__(self,
             set([
@@ -481,17 +557,51 @@ class RV32(Architecture):
         zeroReg = self.get_unique_phys_reg_object(0, RVRegister.IntReg)
         zeroReg.const = True
 
-    def getPhyRegPatternList(self):
-        return [PhysicalRegisterPattern_Int, PhysicalRegisterPattern_Fp]
 
-    def getVirtualRegClassPatternMap(self):
-       REG_CLASS_PATTERN_MAP = {
-           "X": VirtualRegisterPattern_Int,
-           "I": VirtualRegisterPattern_Int,
-           "A": VirtualRegisterPattern_Int,
-           "F": VirtualRegisterPattern_Fp,
-       }
-       return REG_CLASS_PATTERN_MAP
+RV64I_EXTRA_INSN_PATTERN_MATCH = {
+    # 64-bit load and store instructions
+    "ld":   LOAD_INT_PATTERN,
+    "sd":   STORE_INT_PATTERN,
+
+    "slliw":  STD_1OP_1IMM_PATTERN,
+    "srliw":  STD_1OP_1IMM_PATTERN,
+    "sraiw":  STD_1OP_1IMM_PATTERN,
+
+    "sllw":  STD_2OP_PATTERN,
+    "srlw":  STD_2OP_PATTERN,
+    "sraw":  STD_2OP_PATTERN,
+
+    "addw":  STD_2OP_PATTERN,
+    "addiw":  STD_1OP_1IMM_PATTERN,
+    # alias
+    "sext.w": STD_1OP_PATTERN,
+}
+
+RV64D_EXTRA_INSN_PATTERN_MATCH = {
+    # FIXME: RV64D-only
+    "fmv.x.d": FP_OP_PATTERN(RVRegisterPattern_Int, [RVRegisterPattern_FP]),
+    "fmv.x.w": FP_OP_PATTERN(RVRegisterPattern_Int, [RVRegisterPattern_FP]),
+    "fmv.w.x": FP_OP_PATTERN(RVRegisterPattern_FP, [RVRegisterPattern_Int]),
+}
+
+class RV64(RV_Common):
+    def __init__(self):
+        Architecture.__init__(self,
+            set([
+                RegFileDescription(RVRegister.IntReg, 64, PhysicalRegister, VirtualRegister, isAllocatable=isRV64IRegAllocatable),
+                RegFileDescription(RVRegister.FPReg, 64, PhysicalRegister, VirtualRegister, isAllocatable=isRV64FRegAllocatable)
+            ]),
+            dict(list(RV32I_INSN_PATTERN_MATCH.items()) +
+                 list(RV32M_INSN_PATTERN_MATCH.items()) +
+                 list(RV32F_INSN_PATTERN_MATCH.items()) +
+                 list(RV32D_INSN_PATTERN_MATCH.items()) +
+                 list(RV64I_EXTRA_INSN_PATTERN_MATCH.items()) +
+                 list(RV64D_EXTRA_INSN_PATTERN_MATCH.items())
+                 )
+        )
+        # declaring x0 as constant (=0)
+        zeroReg = self.get_unique_phys_reg_object(0, RVRegister.IntReg)
+        zeroReg.const = True
 
 if __name__ == "__main__":
     _ = RV32()

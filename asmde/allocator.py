@@ -481,22 +481,22 @@ class Program:
         """ Declare a new label @p label, if offset is None
             the offset associated with the label is the current program index
             (end of program) else @p offset value is used directly """
+        previous_bb = None
         if not self.current_bb.empty:
             # finishing previous BB and opening a new one
             previous_bb = self.current_bb
-            self.current_bb = self.add_bb(label, realLabel=True, program_insert=True)
+            label_bb = self.get_bb_by_label(label)
             if previous_bb.fallback:
-                previous_bb.connect_to(self.current_bb)
-        if label in self.bb_label_map:
-            # merging several basic-blocks
-            self.current_bb.merge_in(self.bb_label_map[label])
-            for bb_label in self.current_bb.label_list:
-                self.bb_label_map[bb_label] = self.current_bb
+                previous_bb.connect_to(label_bb)
+            assert not label_bb in self.program_seq
+            self.program_seq.append(label_bb)
         else:
-            self.current_bb.label = label
-            # patching label to declare it as true Label
-            self.current_bb.realLabel = True
-            self.bb_label_map[label] = self.current_bb
+            label_bb = self.current_bb
+            label_bb.add_label(label)
+            self.bb_label_map[label] = label_bb
+        assert label_bb in self.program_seq
+        self.current_bb = label_bb
+        label_bb.realLabel = True
 
         #if offset is None:
         #    offset = len(self.bundle_list)
