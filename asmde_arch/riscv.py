@@ -519,7 +519,7 @@ def isRV32FRegAllocatable(regFile, index):
 
 def isRV64IRegAllocatable(regFile, index):
     """ default allocatable list for RV64 integer registers """
-    # FIXME: copy of isRV63IRegAllocatable
+    # FIXME: copy of isRV32IRegAllocatable
     return index in [6, 7, 10, 11, 12, 13, 14, 15, 16, 17, 28, 29, 30, 31]
 def isRV64FRegAllocatable(regFile, index):
     """ default allocatable list for RV64 floating-point registers """
